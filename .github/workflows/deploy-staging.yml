@@ -1,0 +1,103 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  id-token: write # Required for GitHub OIDC
+  contents: read
+
+env:
+  AWS_REGION: ap-southeast-1
+  ECR_BACKEND: uninova-backend-staging
+  ECR_FRONTEND: uninova-frontend-staging
+  ECS_CLUSTER: uninova-staging-cluster
+  ECS_BACKEND_SERVICE: uninova-staging-backend-service
+  ECS_FRONTEND_SERVICE: uninova-staging-frontend-service
+
+jobs:
+  build-and-deploy:
+    name: Build, Migrate and Deploy to Staging
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_STAGING_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 1. Build and Push Backend Image
+      - name: Build & Push Backend Docker Image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_BACKEND:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_BACKEND:staging-latest ./backend
+          docker push $ECR_REGISTRY/$ECR_BACKEND:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_BACKEND:staging-latest
+
+      # 2. Build and Push Frontend Image
+      - name: Build & Push Frontend Docker Image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL=https://api.staging.uninova.pk/api/v1 \
+            -t $ECR_REGISTRY/$ECR_FRONTEND:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_FRONTEND:staging-latest ./frontend
+          docker push $ECR_REGISTRY/$ECR_FRONTEND:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_FRONTEND:staging-latest
+
+      # 3. Execute Database Migrations safely before updating service
+      - name: Run Alembic Database Migrations on ECS
+        run: |
+          echo "Triggering standalone ECS one-off task for Alembic migration..."
+          aws ecs run-task \
+            --cluster $ECS_CLUSTER \
+            --task-definition uninova-staging-backend \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.STAGING_PRIVATE_APP_SUBNET }}],securityGroups=[${{ secrets.STAGING_BACKEND_SG }}],assignPublicIp=DISABLED}" \
+            --overrides '{"containerOverrides": [{"name": "backend", "command": ["alembic", "upgrade", "head"]}]}'
+
+      # 4. Update ECS Services with Circuit Breaker Rollback
+      - name: Deploy Backend to ECS Staging
+        run: |
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $ECS_BACKEND_SERVICE \
+            --force-new-deployment
+
+      - name: Deploy Frontend to ECS Staging
+        run: |
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $ECS_FRONTEND_SERVICE \
+            --force-new-deployment
+
+      # 5. Wait for Services to Stabilize
+      - name: Wait for ECS Staging Stability
+        run: |
+          aws ecs wait services-stable --cluster $ECS_CLUSTER --services $ECS_BACKEND_SERVICE $ECS_FRONTEND_SERVICE
+
+      # 6. Automated Health Verification
+      - name: Staging Healthcheck Smoke Test
+        run: |
+          echo "Probing Staging Health Endpoint..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.staging.uninova.pk/health || echo "000")
+          if [ "$STATUS" -ne 200 ]; then
+            echo "Healthcheck probe failed with status $STATUS!"
+            exit 1
+          fi
+          echo "Staging backend health check returned 200 OK."

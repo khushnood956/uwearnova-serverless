@@ -1,0 +1,1426 @@
+# UniNova Backend Implementation Log
+
+This log records the verified execution, commands, tests, and evidence for each backend implementation module.
+
+---
+
+## [Module M00] — Repository and Architecture Audit
+- **Timestamp:** 2026-11-10T18:35:00+05:00
+- **Status:** Completed
+- **Commands Executed:**
+  - `Get-ChildItem -Path .`: Inspected root files and folders.
+  - `Get-ChildItem -Path src -Recurse`: Inventoried all 13 routes and all UI/common components.
+  - `node --version`, `npm --version`: Confirmed Node v24.18.0, npm 11.16.0.
+  - `python --version`, `pip --version`: Confirmed Python 3.14.6, pip 26.2.1.
+  - `docker --version`: Confirmed Docker version 28.3.3.
+  - `git --version`: Confirmed Git 2.54.0.
+  - `Get-ChildItem -Path . -Recurse -Include *.py,Dockerfile,docker-compose*,alembic.ini,*.sql`: Verified zero backend files currently exist.
+- **Verification Evidence:**
+  - Full audit findings recorded in `docs/backend/REPOSITORY_AUDIT.md`.
+  - Frontend production build verified (33/33 static pages render cleanly).
+  - No application code was altered.
+- **Decisions Recorded:**
+  - Backend to be housed under `backend/` directory in M02.
+  - AWS compute target: Amazon ECS on AWS Fargate with Amazon RDS for MySQL.
+  - Next module: M01 (Documentation and workspace setup).
+
+
+---
+
+## [Module M01] — Documentation and Workspace Setup
+- **Timestamp:** 2026-11-10T18:38:00+05:00
+- **Status:** Completed
+- **Scope & Actions:**
+  - Established the backend documentation suite under `docs/backend/`:
+    - `docs/backend/README.md` (central index and project boundaries)
+    - `docs/backend/01-backend-architecture.md` (FastAPI modular monolith architecture)
+    - `docs/backend/02-database-design.md` (MySQL 8.0 schema and data integrity)
+    - `docs/backend/03-dashboards-and-rbac.md` (Customer, Staff, and Admin RBAC surfaces)
+    - `docs/backend/04-api-contract.md` (`/api/v1` REST conventions and envelopes)
+    - `docs/backend/05-aws-deployment.md` (AWS ECS Fargate, RDS MySQL, S3 deployment)
+    - `docs/backend/06-implementation-plan.md` (37-module tracker)
+    - `docs/backend/REPOSITORY_AUDIT.md` (M00 repository audit)
+  - Created `.env.example` at repository root with environment templates for app, MySQL, JWT, S3 storage, store policies, and Next.js public variables.
+  - Created `.gitignore` at repository root covering Node/Next.js artifacts, Python caches/virtual environments, test coverage, MySQL local data, and secret keys.
+  - Copied master instructions to root `AGENT_BACKEND_INSTRUCTIONS.md`.
+  - Frontend concept (`fashion_ecommerce_concept_brief_performance_focused.md`) and plan (`IMPLEMENTATION_PLAN.md`) remain separate and untouched.
+- **Verification Evidence:**
+  - Verified presence of all documentation files in `docs/backend/`.
+  - Verified no application code was written and no dependencies were installed.
+  - Verified `docs/backend/06-implementation-plan.md` updated with M01 `Completed`.
+- **Decisions Recorded:**
+  - Phase 0 (Discovery and architecture freeze) is now complete.
+  - Ready for Phase 1: M02 (Backend project scaffold).
+
+
+---
+
+## [Module M02] — Backend Project Scaffold
+- **Timestamp:** 2026-11-10T18:45:00+05:00
+- **Status:** Completed
+- **Scope & Actions:**
+  - Established `backend/` directory structure:
+    - `backend/app/main.py`: Application factory, lifespan logging, CORS middleware, error handlers, router mounting.
+    - `backend/app/core/config.py`: Type-safe settings via `pydantic-settings` with `.env` file loading and CORS origin parsing.
+    - `backend/app/core/logging.py`: Structured logging with JSON formatting for production/staging and console formatting for development.
+    - `backend/app/common/errors.py`: Standard API error response models and handlers (`AppException`, `StarletteHTTPException`, `RequestValidationError`).
+    - `backend/app/api/v1/router.py`: API v1 router aggregator.
+    - `backend/app/api/v1/endpoints/health.py`: Liveness (`/health`) and readiness (`/ready`) endpoints.
+    - `backend/tests/`: Asynchronous test suite with `conftest.py` (`httpx.AsyncClient`) and `test_health.py`.
+    - `backend/Dockerfile`: Multi-stage production container with non-root user `uninova` and built-in healthcheck probe.
+    - `backend/pyproject.toml` & `backend/requirements.txt`: Pinned dependencies and pytest configuration.
+    - `backend/.env.example`: Environment template for backend service.
+  - Verified business logic is kept out of `main.py`.
+  - Zero database models or auth implemented (reserved for M03/M04).
+- **Commands Executed:**
+  - `python -m venv backend\.venv`: Created isolated Python virtual environment.
+  - `pip install`: Installed FastAPI, Uvicorn, Pydantic v2, Pydantic-Settings, HTTPX, and Pytest.
+  - `pytest`: Ran all 6 tests (`test_health.py`). Result: `6 passed in 0.07s`.
+  - Live server verification: Started Uvicorn on port 8000; probed `http://127.0.0.1:8000/health` and `http://127.0.0.1:8000/ready` via live HTTP requests; verified JSON output and 200 OK status codes.
+- **Verification Evidence:**
+  - `tests/test_health.py`: All 6 assertions passed (liveness, readiness, versioned endpoints, OpenAPI schema, and 404 standard envelope).
+  - Server process cleanly launched and handled requests.
+- **Decisions Recorded:**
+  - Ready for M03: MySQL and migrations (Docker MySQL service, SQLAlchemy 2.x async engine, and Alembic).
+
+
+---
+
+## [Module M03] — MySQL and Database Migrations
+- **Timestamp:** 2026-11-10T18:57:00+05:00
+- **Status:** Completed
+- **Scope & Actions:**
+  - Configured MySQL 8.0 connectivity in `backend/app/core/config.py`:
+    - `sync_database_url` (`mysql+pymysql://...`) for Alembic migrations and CLI operations.
+    - `async_database_url` (`mysql+aiomysql://...`) for FastAPI async runtime.
+    - Configured robust connection pooling (`DB_POOL_SIZE=10`, `DB_MAX_OVERFLOW=20`, `DB_POOL_RECYCLE=1800`, `DB_POOL_PRE_PING=True`).
+  - Implemented database session & connection management in `backend/app/core/database.py`:
+    - `build_async_engine()` with connection pooling.
+    - `AsyncSessionLocal` session factory with `expire_on_commit=False`.
+    - `get_db()` transactional dependency yielding session with auto-commit on success and rollback on exceptions.
+    - `check_database_health()` lightweight ping (`SELECT 1`) with 2-second timeout.
+  - Established base model conventions in `backend/app/core/base.py`:
+    - Standardized constraint naming convention (`NAMING_CONVENTION` for `pk`, `fk`, `ix`, `uq`, `ck`).
+    - `Base(DeclarativeBase)`.
+    - `IDMixin`: Standardized primary key (`BIGINT` for MySQL, with `Integer` variant for SQLite test dialect).
+    - `TimestampMixin`: UTC `created_at` and `updated_at` timestamps with server defaults.
+  - Integrated database health probe into `/ready` endpoint in `backend/app/api/v1/endpoints/health.py`:
+    - Dynamically reports `services.database` (`healthy` or `unhealthy`) and overall status (`ready` or `degraded`).
+  - Configured Alembic migrations:
+    - Initialized `backend/migrations/` and `backend/alembic.ini`.
+    - Configured `backend/migrations/env.py` to dynamically load `Base.metadata` and read the database URL.
+    - Generated baseline revision: `1b97deaf6b37_baseline_schema.py`.
+    - Verified offline migration DDL generation (`alembic upgrade head --sql`) using `Context impl MySQLImpl`.
+  - Added `docker-compose.yml` for local development:
+    - MySQL 8.0 container service with volume persistence, credentials, and healthcheck.
+  - Zero business tables prematurely created (catalog, customer, and order tables reserved for Phase 2).
+- **Commands Executed:**
+  - `pip install`: Installed `sqlalchemy[asyncio]`, `greenlet`, `alembic`, `pymysql`, `aiomysql`, `cryptography`, and `aiosqlite`.
+  - `alembic init migrations`: Generated Alembic scaffolding.
+  - `alembic revision -m "baseline_schema"`: Created baseline revision.
+  - `alembic upgrade head --sql`: Verified offline MySQL DDL generation.
+  - `pytest`: Executed test suite (`test_database.py`, `test_health.py`, `test_migrations.py`). Result: `16 passed in 3.63s`.
+  - Live HTTP probe: Tested `/ready` endpoint via Uvicorn.
+- **Verification Evidence:**
+  - All 16 automated tests passed without warnings.
+  - Alembic offline SQL output confirmed `MySQLImpl` emitting valid `CREATE TABLE alembic_version`.
+- **Decisions Recorded:**
+  - Ready for M04: Identity and authentication (User/Customer/Staff models, password hashing, JWT/session foundation).
+
+
+---
+
+## [Module M04] — Identity and Authentication
+- **Timestamp:** 2026-11-10T19:12:00+05:00
+- **Status:** Completed
+- **Scope & Actions:**
+  - Implemented Argon2id password hashing and PyJWT token generation in `backend/app/core/security.py`:
+    - OWASP-recommended parameters (`time_cost=3`, `memory_cost=65536`, `parallelism=4`).
+    - `hash_password`, `verify_password`.
+    - `hash_token` (SHA-256 for refresh/reset tokens).
+    - `create_access_token` (JWT with user ID and user type claims, 30m expiry).
+    - `decode_access_token` (signature and expiry validation).
+  - Defined database models in `backend/app/modules/auth/models.py`:
+    - `User`: `email` (unique index, normalized), `password_hash`, `phone`, `status` (active/disabled/locked), `user_type` (customer/staff/admin), `failed_login_attempts`, `locked_until`.
+    - `RefreshToken`: `user_id` (FK cascade), `token_hash` (unique index), `revoked`, `expires_at` (14 days).
+    - `PasswordReset`: `user_id` (FK cascade), `token_hash` (unique index), `expires_at` (1 hour), `used`.
+  - Implemented Pydantic v2 schemas in `backend/app/modules/auth/schemas.py`:
+    - `RegisterRequest`, `LoginRequest`, `TokenResponse`, `RefreshTokenRequest`, `ChangePasswordRequest`, `PasswordResetRequest`, `PasswordResetConfirmRequest`, `UserResponse`.
+    - Email normalization (`EmailStr`), password constraints (minimum 8 characters), safe user serialization without `password_hash`.
+  - Implemented service layer in `backend/app/modules/auth/service.py`:
+    - `register_user`: Checks email uniqueness, hashes password, returns user.
+    - `authenticate_user`: Brute-force protection, increments failed attempts, locks account after 5 attempts for 15 minutes, verifies Argon2id hash.
+    - `create_user_tokens`: Issues access token + persists hashed refresh token.
+    - `rotate_refresh_token`: Enforces single-use refresh token rotation; invalidates rotated token.
+    - `revoke_refresh_token`: Logout session invalidation.
+    - `change_password`: Validates current password, updates hash, revokes all active sessions.
+    - `create_password_reset_token` & `reset_password_with_token`: Self-service password recovery flow with session invalidation.
+  - Implemented authentication dependencies in `backend/app/modules/auth/dependencies.py`:
+    - `get_current_user`: Validates Bearer token and returns active User entity.
+  - Implemented REST endpoints in `backend/app/modules/auth/router.py`:
+    - `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me`, `POST /api/v1/auth/change-password`, `POST /api/v1/auth/password-reset/request`, `POST /api/v1/auth/password-reset/confirm`.
+  - Generated and validated Alembic migration revision:
+    - `backend/migrations/versions/f65b9f41043f_create_identity_and_auth_tables.py`
+    - Verified MySQL DDL via `alembic upgrade head --sql`.
+- **Commands Executed:**
+  - `pip install`: Installed `argon2-cffi`, `pyjwt`, and `email-validator`.
+  - `alembic revision`: Generated migration script for auth tables.
+  - `alembic upgrade head --sql`: Verified offline MySQL DDL generation.
+  - `pytest`: Executed complete test suite (`test_auth.py`, `test_database.py`, `test_health.py`, `test_migrations.py`).
+- **Verification Evidence:**
+  - `pytest`: **29 passed in 7.44s** with 0 warnings and 0 failures.
+  - All 13 authentication tests in `test_auth.py` passed (registration, login, lockout after 5 attempts, token rotation, token revocation on reuse, logout, password change, and password reset).
+- **Decisions Recorded:**
+  - Detailed role permissions and RBAC matrix are reserved for Module M05.
+
+
+---
+
+## [Module M05] — RBAC and Audit Logging
+- **Timestamp:** 2026-11-10T19:26:00+05:00
+- **Status:** Completed
+- **Scope & Actions:**
+  - Defined database models for RBAC and audit logging:
+    - `backend/app/modules/rbac/models.py`:
+      - `Role`: System and custom roles (`name`, `display_name`, `description`, `is_system`, `permissions`).
+      - `Permission`: Fine-grained permission codes (`code`, `description`, `category`).
+      - Association tables: `role_permissions` and `user_roles` with `ON DELETE CASCADE`.
+    - `backend/app/modules/audit/models.py`:
+      - `AuditLog`: Immutable audit trail recording actor (`user_id`, `actor_email`), action (`action`), target (`entity_type`, `entity_id`), client metadata (`ip_address`, `user_agent`), structured JSON payload (`details`), and timestamp (`created_at`).
+    - Extended `backend/app/modules/auth/models.py`:
+      - Linked `User.roles` through `user_roles` association with `lazy="selectin"`.
+  - Defined permissions catalog and initial system roles matching `docs/backend/03-dashboards-and-rbac.md` in `backend/app/modules/rbac/permissions.py`:
+    - 28 granular permissions across categories: `dashboard`, `catalog`, `inventory`, `orders`, `fulfillment`, `customers`, `returns`, `payments`, `marketing`, `staff`, `rbac`, `reports`, and `system`.
+    - Standard system roles: `store_admin` (full permissions), `order_manager`, `fulfillment_staff`, `inventory_manager`, `customer_support`, and `customer`.
+  - Defined Pydantic schemas in `backend/app/modules/rbac/schemas.py` and `backend/app/modules/audit/schemas.py`:
+    - `PermissionResponse`, `RoleResponse`, `AssignRoleRequest`, `UserRolesResponse`.
+    - `AuditLogResponse`, `AuditLogListResponse`.
+  - Implemented service layer:
+    - `backend/app/modules/audit/service.py`:
+      - `log_audit_event()`: Serializes details to JSON and writes immutable audit entry.
+      - `get_audit_logs()`: Paginated query with optional action/entity filters and total counts.
+    - `backend/app/modules/rbac/service.py`:
+      - `seed_system_roles_and_permissions()`: Idempotent seeder populating standard catalog and system roles.
+      - `get_user_permissions()`: Resolves active permission codes for a user; automatic full grant for `user_type == "admin"`.
+      - `list_roles()`: Preloads all roles and attached permissions.
+      - `assign_role_to_user()`: Validates target user, prevents privilege escalation (non-admin actor cannot assign roles with permissions they lack), promotes customer to `staff` upon staff role assignment, and persists audit entry (`role.assigned`).
+      - `remove_role_from_user()`: Revokes role association with audit entry (`role.removed`).
+  - Implemented reusable authorization dependencies in `backend/app/modules/rbac/dependencies.py`:
+    - `require_permission(code)`: Reusable endpoint guard returning 403 `INSUFFICIENT_PERMISSIONS` on unauthorized access.
+    - `require_any_permission(codes)`: Requires user to hold at least one of the listed permissions.
+    - `require_admin()`: Restricts endpoint to admin user types or users holding `roles.manage`/`settings.manage`.
+    - `require_staff()`: Restricts endpoint to staff or admin user types; returns 403 `STAFF_REQUIRED` for customers.
+  - Implemented administrative API endpoints:
+    - `backend/app/modules/rbac/router.py`:
+      - `GET /api/v1/admin/roles`: Protected by `roles.read`.
+      - `POST /api/v1/admin/roles/users/{user_id}/assign`: Protected by `roles.manage` with privilege escalation checks and audit logging.
+      - `DELETE /api/v1/admin/roles/users/{user_id}/roles/{role_id}`: Protected by `roles.manage` with audit logging.
+    - `backend/app/modules/audit/router.py`:
+      - `GET /api/v1/admin/audit-logs`: Protected by `audit.read` with pagination and action/entity filtering.
+    - Mounted both routers under `/api/v1` in `backend/app/api/v1/router.py`.
+  - Database migration:
+    - Created revision `3d8042914983_create_rbac_and_audit_tables.py` creating `permissions`, `roles`, `role_permissions`, `user_roles`, and `audit_logs`.
+    - Verified offline MySQL DDL generation via `alembic upgrade head --sql`.
+  - Comprehensive automated testing:
+    - Implemented `backend/tests/test_rbac.py` testing:
+      - Idempotent role & permission seeding (`test_seed_roles_and_permissions_idempotent`).
+      - Permission resolution for admin, staff, and customer (`test_get_user_permissions_admin_and_staff`).
+      - Role endpoint authorization (401 unauthenticated, 403 customer, 200 admin) (`test_roles_endpoint_authorization`).
+      - Role assignment, staff promotion, revocation, and immutable audit logs (`test_role_assignment_and_audit_log`).
+      - Privilege escalation prevention rejecting non-admin granting higher privileges (`test_privilege_escalation_prevention`).
+      - Audit logs inspection, pagination, and action filtering (`test_audit_logs_inspection_endpoint`).
+      - Authorization dependency callables (`test_authorization_dependency_callables`).
+- **Commands Executed:**
+  - `alembic upgrade head --sql`: Verified offline MySQL migration DDL.
+  - `pytest tests/test_rbac.py`: 7 RBAC tests passed in 1.47s.
+  - `pytest`: Complete test suite passed (**36 passed in 11.40s**).
+  - `npm run build`: Frontend verified untouched; all 33 Next.js pages generated cleanly.
+- **Verification Evidence:**
+  - 36/36 backend tests pass with 0 failures and 0 warnings.
+  - Frontend production build succeeds (33/33 static pages).
+- **Decisions Recorded:**
+  - Complete server-side authorization enforcement; no reliance on frontend UI visibility.
+  - Ready for Phase 2: Core commerce data (Module M06 — Categories and Collections).
+
+
+---
+
+## [Module M06] — Categories and Collections
+- **Timestamp:** 2026-11-10T19:42:00+05:00
+- **Status:** Completed
+- **Scope & Actions:**
+  - Implemented database models in `backend/app/modules/catalog/models.py`:
+    - `Category`: `id`, `parent_id` (self-referencing FK with `ondelete="RESTRICT"`), `name`, `slug`, `description`, `image_url`, `sort_order`, `is_active`, `created_at`, `updated_at`. Self-referencing hierarchical relationships (`parent`, `children` with `order_by="Category.sort_order"`).
+    - `Collection`: `id`, `name`, `slug`, `description`, `image_url`, `sort_order`, `is_active`, `created_at`, `updated_at`.
+  - Implemented Pydantic v2 schemas in `backend/app/modules/catalog/schemas.py`:
+    - Slug regex validation (`^[a-z0-9]+(?:-[a-z0-9]+)*$`).
+    - `CategoryCreate`, `CategoryUpdate`, `CategoryResponse`, `CategoryTreeResponse` (nested hierarchy nodes).
+    - `CollectionCreate`, `CollectionUpdate`, `CollectionResponse`.
+  - Implemented service layer in `backend/app/modules/catalog/service.py`:
+    - `get_active_categories`: Public category listing with optional `parent_id` and `roots_only` filters.
+    - `get_category_tree`: Assembles nested hierarchical category tree without N+1 or lazy loading errors.
+    - `get_category_by_slug_or_id`: Public and admin lookup with active-only filter.
+    - `create_category`: Validates unique name (409) and slug (409), validates parent existence (404), logs audit event (`category.created`).
+    - `update_category`: Collision checks on rename/reslug, validates parent assignment, prevents self-parenting (400) and cyclical hierarchy (400), logs audit event (`category.updated`).
+    - `delete_category`: Safe deletion strategy preventing deletion of categories containing subcategories (400 `CATEGORY_HAS_CHILDREN`), logs audit event (`category.deleted`).
+    - `get_active_collections`, `get_collection_by_slug_or_id`, `create_collection`, `update_collection`, `delete_collection` with duplicate slug/name validation and audit logging (`collection.created`, `collection.updated`, `collection.deleted`).
+  - Implemented REST API routers in `backend/app/modules/catalog/router.py`:
+    - Public Storefront:
+      - `GET /api/v1/categories`: Lists active categories with parent/root filtering.
+      - `GET /api/v1/categories/tree`: Full hierarchical category tree.
+      - `GET /api/v1/categories/{identifier}`: Active category by slug or numeric ID.
+      - `GET /api/v1/collections`: Lists active curated collections.
+      - `GET /api/v1/collections/{identifier}`: Active collection by slug or ID.
+    - Protected Administration:
+      - `GET /api/v1/admin/categories`: All categories including inactive (`categories.manage` or `products.read`).
+      - `GET /api/v1/admin/categories/{category_id}`: Category by ID (`categories.manage` or `products.read`).
+      - `POST /api/v1/admin/categories`: Create category (`categories.manage`).
+      - `PUT /api/v1/admin/categories/{category_id}`: Update category (`categories.manage`).
+      - `DELETE /api/v1/admin/categories/{category_id}`: Safe delete (`categories.manage`).
+      - `GET /api/v1/admin/collections`: All collections (`collections.manage` or `products.read`).
+      - `GET /api/v1/admin/collections/{collection_id}`: Collection by ID (`collections.manage` or `products.read`).
+      - `POST /api/v1/admin/collections`: Create collection (`collections.manage`).
+      - `PUT /api/v1/admin/collections/{collection_id}`: Update collection (`collections.manage`).
+      - `DELETE /api/v1/admin/collections/{collection_id}`: Delete collection (`collections.manage`).
+    - Mounted in `backend/app/api/v1/router.py`.
+  - Database Migration:
+    - Generated revision `19b855e08445_create_categories_and_collections_tables.py`.
+    - Verified offline MySQL DDL generation via `alembic upgrade head --sql`.
+    - Updated `backend/tests/test_migrations.py` head assertion to `19b855e08445`.
+  - Comprehensive automated tests in `backend/tests/test_catalog.py`:
+    - Public category listing, root/parent filtering, hierarchical tree rendering, and inactive filtering.
+    - Public collection listing and storefront 404 for inactive collections.
+    - Administrative access control (401 unauthenticated, 403 customer, 200 store_admin).
+    - Category lifecycle: duplicate name 409, duplicate slug 409, invalid slug pattern 422.
+    - Cycle prevention (400 `CYCLICAL_CATEGORY_HIERARCHY`), self-parenting (400 `INVALID_PARENT_CATEGORY`).
+    - Safe deletion preventing deletion of categories with children (400 `CATEGORY_HAS_CHILDREN`).
+    - Collection lifecycle with duplicate collision checks and audit logging.
+- **Commands Executed:**
+  - `alembic revision -m "create_categories_and_collections_tables"`: Created migration.
+  - `alembic upgrade head --sql`: Verified offline MySQL migration DDL.
+  - `pytest tests/test_catalog.py`: 5 passed in 0.65s.
+  - `pytest`: Full test suite passed (**41 passed in 13.60s**).
+  - `npm run build`: Verified 33/33 Next.js static pages generated cleanly with 0 regressions.
+- **Verification Evidence:**
+  - 41/41 backend tests pass without error.
+  - Frontend production build compiles with zero errors.
+- **Decisions Recorded:**
+  - Hierarchical category tree built without N+1 ORM lazy loading.
+  - Safe deletion enforced; categories with children cannot be deleted.
+  - Ready for Module M07: Product catalogue.
+
+
+---
+
+## [Module M07] — Product Catalogue
+- **Timestamp:** 2026-11-10T19:59:00+05:00
+- **Status:** Completed
+- **Scope & Actions:**
+  - Reviewed and analyzed `src/data/products.ts` (10 authentic products across Men, Women, Footwear, Accessories).
+  - Implemented database models in `backend/app/modules/catalog/models.py`:
+    - `Product`: `id`, `category_id` (FK to `categories.id`), `name`, `slug`, `subtitle`, `description`, `brand_label`, `status` (`draft`, `active`, `archived`), `price` (`Numeric(10, 2)`), `original_price` (`Numeric(10, 2)`), `is_new_arrival`, `is_trending`, `is_featured`, `fabric_care` (JSON string), `delivery_notes`, `rating`, `review_count`, `published_at`, `created_at`, `updated_at`.
+    - `ProductVariant`: `id`, `product_id` (FK cascade), `sku` (unique), `size`, `color_name`, `color_hex`, `price` (`Numeric(10, 2)`), `compare_at_price` (`Numeric(10, 2)`), `inventory_count`, `in_stock`, `weight_grams`, `is_active`, `created_at`, `updated_at`.
+    - `ProductImage`: `id`, `product_id` (FK cascade), `image_url`, `alt_text`, `sort_order`, `is_primary`, `created_at`.
+    - `product_collections`: Association table mapping products to curated collections.
+  - Implemented Pydantic v2 schemas in `backend/app/modules/catalog/schemas.py`:
+    - Strict `Decimal` types for all monetary fields (`price`, `original_price`, `compare_at_price`).
+    - Kebab-case slug validation (`^[a-z0-9]+(?:-[a-z0-9]+)*$`).
+    - JSON serializer/deserializer field validator for `fabric_care`.
+    - `ProductCreate`, `ProductUpdate`, `ProductResponse`, `ProductListResponse`, `ProductVariantCreate`, `ProductVariantUpdate`, `ProductVariantResponse`, `ProductImageCreate`, `ProductImageResponse`.
+  - Implemented service layer in `backend/app/modules/catalog/service.py`:
+    - `list_products`: Faceted filtering by category (`category_id`, `category_slug`), collection (`collection_id`, `collection_slug`), price bounds (`min_price`, `max_price`), attributes (`sizes`, `colors`, `in_stock_only`), editorial flags (`is_new_arrival`, `is_trending`, `is_featured`), multi-field search (`name`, `slug`, `subtitle`, `description`), sorting (`newest`, `price_asc`, `price_desc`, `rating`, `featured`), and pagination (`limit`, `offset`).
+    - `get_product_by_slug_or_id`: Retrieves product with eager-loaded variants, images, category, and collections.
+    - `create_product`: Validates slug uniqueness (409 `PRODUCT_SLUG_EXISTS`), SKU uniqueness (409 `VARIANT_SKU_EXISTS`), category existence (404), persists variants and imagery, and logs audit record (`product.created`).
+    - `update_product`: Updates attributes, validates slug collision and category existence, updates collections, and logs audit record (`product.updated`).
+    - `delete_product`: Cascades deletion to variants/images/collection-links and logs audit record (`product.deleted`).
+    - `add_product_variant`: Adds variant with SKU collision checks and audit recording.
+  - Built authentic data seeder in `backend/app/modules/catalog/seed_data.py`:
+    - Maps all 10 authentic products, categories, collections, and variant combinations from `src/data/products.ts` without fabricating data.
+  - Implemented REST API routers in `backend/app/modules/catalog/router.py`:
+    - Public Storefront:
+      - `GET /api/v1/products`: Faceted search and pagination.
+      - `GET /api/v1/products/{identifier}`: Active product detail by slug or ID.
+    - Protected Admin:
+      - `GET /api/v1/admin/products`: Product listing with draft/archived status filter (`products.read`).
+      - `GET /api/v1/admin/products/{product_id}`: Admin detail inspection (`products.read`).
+      - `POST /api/v1/admin/products`: Create product (`products.create`).
+      - `PUT /api/v1/admin/products/{product_id}`: Update product (`products.update`).
+      - `DELETE /api/v1/admin/products/{product_id}`: Delete product (`products.archive`).
+      - `POST /api/v1/admin/products/{product_id}/variants`: Add SKU variant (`products.update`).
+    - Mounted under `/api/v1` in `backend/app/api/v1/router.py`.
+  - Database Migration:
+    - Generated revision `d4fc55d592df_create_products_variants_and_images_.py`.
+    - Verified offline MySQL DDL generation via `alembic upgrade head --sql`.
+    - Updated `backend/tests/test_migrations.py` head assertion to `d4fc55d592df`.
+  - Automated Tests in `backend/tests/test_products.py`:
+    - Authentic seeding verification (`test_seed_products_from_source`).
+    - Storefront faceted filtering by category, collection, price range, variant attributes, search keyword, sorting, and pagination (`test_public_products_faceted_filtering`).
+    - Storefront product detail retrieval with variants, imagery, swatches, and care instructions (`test_public_product_detail`).
+    - Administrative access control (`test_admin_product_access_control`).
+    - Admin product creation with duplicate slug/SKU collision rejection, variant addition, update, delete, and audit trail (`test_admin_product_create_and_validation`).
+- **Commands Executed:**
+  - `alembic revision -m "create_products_variants_and_images_tables"`: Created migration.
+  - `alembic upgrade head --sql`: Verified offline MySQL migration DDL.
+  - `pytest tests/test_products.py`: 5 passed in 0.94s.
+  - `pytest`: Full test suite passed (**46 passed in 10.13s**).
+  - `npm run build`: Verified 33/33 Next.js static pages generated cleanly with 0 regressions.
+- **Verification Evidence:**
+  - 46/46 backend tests pass with 0 failures and 0 warnings.
+  - Frontend production build compiles with zero errors.
+- **Decisions Recorded:**
+  - All monetary values stored as `Numeric(10, 2)` and validated as Python `Decimal`.
+  - Preserved existing product catalog structure from `src/data/products.ts`.
+  - Ready for Module M08: Product media storage.
+
+
+---
+
+## [Module M08] — Product Media and S3
+- **Timestamp:** 2026-11-10T20:10:00+05:00
+- **Status:** Completed
+- **Scope & Actions:**
+  - Configured AWS S3 and media storage settings in `backend/app/core/config.py`:
+    - `STORAGE_BACKEND` (`mock` | `local` | `s3`), `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET_NAME`, `AWS_CLOUDFRONT_DOMAIN`, `MEDIA_UPLOAD_MAX_BYTES` (10MB), `MEDIA_ALLOWED_MIME_TYPES` (`image/jpeg`, `image/png`, `image/webp`, `image/avif`), `PRESIGNED_URL_EXPIRE_SECONDS` (900s).
+    - Documented variables in `.env.example`.
+  - Updated database models in `backend/app/modules/catalog/models.py`:
+    - Extended `ProductImage`: `storage_key` (`String(255)`, indexed), `file_size_bytes` (`BigInteger`), `mime_type` (`String(64)`), `width` (`Integer`), `height` (`Integer`), `image_url` (`String(1024)`), `alt_text`, `sort_order`, `is_primary`, `created_at`.
+  - Built storage abstraction and adapters in `backend/app/modules/media/storage.py`:
+    - `BaseStorageService`: Abstract interface defining `generate_presigned_upload`, `get_public_url`, `delete_file`, and `file_exists`.
+    - `S3StorageService`: AWS S3 integration via `boto3`, generating short-lived presigned PUT URLs with `Content-Type` constraints and resolving CDN URLs through `AWS_CLOUDFRONT_DOMAIN` (or falling back to virtual-hosted S3 URLs).
+    - `MockStorageService`: In-memory isolated storage adapter for testing and offline local development without AWS credentials.
+    - `sanitize_filename`: Filename sanitizer generating clean kebab-case tokens for S3 object keys.
+  - Implemented service layer in `backend/app/modules/media/service.py`:
+    - `request_product_image_upload`: Validates product existence (404), MIME type against allowlist (400 `INVALID_MIME_TYPE`), and file size against 10MB limit (400 `FILE_TOO_LARGE`). Generates unique partitioned S3 key (`products/{product_id}/images/{token}-{filename}`) and presigned PUT URL.
+    - `confirm_product_image_upload`: Verifies direct client upload, registers metadata in MySQL, guarantees primary thumbnail exclusivity (unsets previous primaries on new primary upload; automatically assigns primary if first image), and records audit log (`product_image.uploaded`).
+    - `reorder_product_images`: Updates display sequence (`sort_order`) across image gallery and records audit log (`product_images.reordered`).
+    - `set_primary_product_image`: Explicit primary designation unsetting previous primaries with audit log (`product_image.set_primary`).
+    - `delete_product_image`: Deletes file from S3 storage via `storage_service.delete_file(storage_key)`, deletes database record, automatically promotes lowest `sort_order` remaining image to primary if deleted image was primary, and records audit log (`product_image.deleted`).
+    - `list_product_images`: Lists gallery images sorted by `sort_order`.
+  - Implemented administrative REST endpoints in `backend/app/modules/media/router.py`:
+    - Mounted at `/api/v1/admin/products/{product_id}/media`:
+      - `POST /upload-intent`: Issues presigned S3 PUT URL (`products.update`).
+      - `POST /confirm`: Finalizes direct S3 upload and registers metadata (`products.update`).
+      - `GET /`: Lists product media records (`products.read`).
+      - `PUT /reorder`: Reorders gallery sequence (`products.update`).
+      - `PUT /{image_id}/set-primary`: Sets target image as primary thumbnail (`products.update`).
+      - `DELETE /{image_id}`: Deletes metadata and underlying S3 object (`products.update`).
+    - Mounted in `backend/app/api/v1/router.py`.
+  - Database Migration:
+    - Generated revision `eb987fbddf47_add_product_media_metadata_columns.py`.
+    - Verified offline MySQL DDL generation via `alembic upgrade head --sql`.
+    - Updated `backend/tests/test_migrations.py` head assertion to `eb987fbddf47`.
+  - Automated Tests in `backend/tests/test_media.py`:
+    - Presigned upload intent validation: rejection of disallowed MIME types (400), file size limit enforcement (400), non-existent product handling (404), and successful intent generation with partitioned keys.
+    - S3StorageService unit tests with mocked boto3 verifying presigned PUT parameters, CloudFront CDN URL resolution, and S3 object deletion.
+    - Upload confirmation, metadata registration, auto-primary on first upload, and primary thumbnail exclusivity.
+    - Gallery display sequence reordering.
+    - Deletion of primary image with S3 file cleanup and fallback promotion of remaining image to primary.
+- **Commands Executed:**
+  - `pip install "boto3>=1.35.0"`: Installed boto3 and dependencies.
+  - `alembic revision -m "add_product_media_metadata_columns"`: Generated migration.
+  - `alembic upgrade head --sql`: Verified offline MySQL migration DDL.
+  - `pytest tests/test_media.py`: 4 passed in 2.63s.
+  - `pytest`: Full test suite passed (**50 passed in 23.51s**).
+  - `npm run build`: Verified 33/33 Next.js static pages generated cleanly with 0 regressions.
+- **Verification Evidence:**
+  - 50/50 backend tests pass with 0 failures and 0 warnings.
+  - Frontend production build compiles with zero errors.
+- **Decisions Recorded:**
+  - Direct client-to-S3 upload pattern via presigned PUT URLs used to offload media payload traffic from FastAPI application servers.
+  - Media URLs resolve via CloudFront CDN domain when configured.
+  - Ready for Module M09: Inventory management.
+
+
+---
+
+## [Module M09] — Inventory Management
+- **Timestamp:** 2026-11-10T21:40:00+05:00
+- **Status:** Completed
+- **Scope & Actions:**
+  - Implemented database models in `backend/app/modules/inventory/models.py`:
+    - `InventoryLocation`: Warehouse/fulfillment facility with `name`, unique `code` (`WH-PRIMARY`, `LHE-WH-02`), `address_line_1`, `city`, `postal_code`, `country_code` ("PK"), and `is_active` toggle.
+    - `InventoryItem`: Links variant to location with `quantity_on_hand` (physical units), `quantity_reserved` (active checkouts/holds), `reorder_threshold` (replenishment alert default 5), and unique constraint `uq_inventory_items_variant_location`. Computed properties: `quantity_available = max(0, quantity_on_hand - quantity_reserved)` and `is_low_stock = quantity_available <= reorder_threshold`.
+    - `InventoryMovement`: Immutable ledger for every stock change storing `variant_id`, `location_id`, `movement_type` (`receipt`, `sale`, `reservation`, `release`, `return`, `adjustment`, `cycle_count`, `damaged`), `quantity_delta`, before/after snapshots (`quantity_on_hand_before`, `quantity_on_hand_after`, `quantity_reserved_before`, `quantity_reserved_after`), `reference_type`, `reference_id`, `reason_notes`, `created_by_user_id`, and `created_at`.
+  - Configured relationships on `ProductVariant` in `backend/app/modules/catalog/models.py`:
+    - Added `inventory_items` relationship with cascade delete-orphan.
+  - Implemented Pydantic schemas in `backend/app/modules/inventory/schemas.py`:
+    - `InventoryLocationCreate`, `InventoryLocationResponse`, `InventoryItemResponse` (with enriched variant SKU, product name, and location metadata), `InventoryItemListResponse`, `StockAdjustmentRequest`, `StockReservationRequest`, `StockReleaseRequest`, `StockThresholdUpdateRequest`, and `InventoryMovementListResponse`.
+  - Implemented service layer in `backend/app/modules/inventory/service.py`:
+    - `get_or_create_default_location`: Bootstraps "Primary Fulfillment Warehouse" (`WH-PRIMARY` in Karachi) with nested savepoint concurrency protection.
+    - `adjust_stock`: Executes physical stock intake or decrement using atomic conditional SQL updates (`quantity_on_hand + delta >= quantity_reserved` and `>= 0`). Enforces non-negative inventory (rejects excess decrements with 400 `INSUFFICIENT_STOCK`). Captures before/after snapshots, appends `InventoryMovement`, synchronizes parent `ProductVariant.inventory_count` and `in_stock`, and records audit log (`inventory.adjusted`).
+    - `reserve_stock`: Reserves available stock for checkouts/orders using atomic conditional updates. Rejects reservations exceeding available stock (400 `INSUFFICIENT_STOCK`). Records movement (`reservation`), updates variant availability, and logs audit event (`inventory.reserved`).
+    - `release_stock`: Restores reserved units to available stock using atomic conditional updates. Prevents releasing more than currently reserved (400 `INVALID_RELEASE_QUANTITY`). Records movement (`release`), updates variant availability, and logs audit event (`inventory.released`).
+    - `update_reorder_threshold`: Updates alert threshold and logs audit event (`inventory.threshold_updated`).
+    - `list_inventory_items`: Paginated search across SKUs and product names with optional low-stock filtering.
+    - `list_inventory_movements`: Chronological immutable movement audit log with variant, location, and movement type filters.
+  - Implemented REST router in `backend/app/modules/inventory/router.py`:
+    - `GET /api/v1/admin/inventory/locations`: List warehouse locations (`inventory.read`).
+    - `POST /api/v1/admin/inventory/locations`: Create warehouse location (`inventory.adjust`).
+    - `GET /api/v1/admin/inventory`: List stock levels with filtering and pagination (`inventory.read`).
+    - `GET /api/v1/admin/inventory/low-stock`: View items at or below replenishment threshold (`inventory.read`).
+    - `POST /api/v1/admin/inventory/adjust`: Manual stock adjustment (`inventory.adjust`).
+    - `POST /api/v1/admin/inventory/reserve`: Reserve stock units (`inventory.adjust`).
+    - `POST /api/v1/admin/inventory/release`: Release reserved stock units (`inventory.adjust`).
+    - `PATCH /api/v1/admin/inventory/variants/{variant_id}/locations/{location_id}/threshold`: Update threshold (`inventory.adjust`).
+    - `GET /api/v1/admin/inventory/movements`: Immutable movement audit ledger (`inventory.read`).
+    - Mounted in `backend/app/api/v1/router.py`.
+  - Database Migration:
+    - Generated revision `05ed229b0f54_create_inventory_tables.py` creating `inventory_locations`, `inventory_items`, and `inventory_movements` tables with indices and foreign key cascades.
+    - Verified offline MySQL DDL generation via `alembic upgrade head --sql`.
+    - Updated `backend/tests/test_migrations.py` head assertion to `05ed229b0f54`.
+  - Automated Tests in `backend/tests/test_inventory.py`:
+    - Location bootstrapping and multi-location creation.
+    - Stock receipt intake (+25 units), snapshot recording, and variant stock synchronization (`inventory_count = 25`, `in_stock = True`).
+    - Stock decrement (-3 units) and negative stock prevention (attempting -10 on 7 units rejected with 400 `INSUFFICIENT_STOCK`).
+    - Stock reservation lifecycle: reserving 4 of 10 reduces available to 6; over-reservation (requesting 7) rejected; adjustment below reserved rejected; releasing 3 units restores available to 9; invalid release (releasing 5 when 1 reserved) rejected with 400 `INVALID_RELEASE_QUANTITY`.
+    - Low-stock threshold detection and dedicated low-stock endpoint query.
+    - Chronological movement ledger filtering by variant and movement type.
+    - Concurrency safety: 5 concurrent adjustments executed simultaneously via `asyncio.gather` with atomic SQL expressions, accurately reaching exact expected stock without race conditions or lost updates.
+    - RBAC access control: anonymous 401, customer 403, customer support without `inventory.adjust` 403, and inventory manager/store admin authorized.
+- **Commands Executed:**
+  - `alembic revision -m "create_inventory_tables"`: Created migration `05ed229b0f54`.
+  - `pytest tests/test_migrations.py`: 3 passed in 1.36s.
+  - `pytest tests/test_inventory.py`: 8 passed in 4.41s.
+  - `pytest`: Full test suite passed (**58 passed in 30.48s**).
+  - `npm run build`: Verified 33/33 Next.js static pages generated cleanly with 0 regressions.
+- **Verification Evidence:**
+  - 58/58 backend tests pass with 100% success rate.
+  - Frontend production build compiles cleanly without errors or modifications.
+- **Decisions Recorded:**
+  - Database-level atomic SQL conditional expressions (`update(InventoryItem).where(...).values(...)`) used alongside row locking to guarantee strict concurrency safety and non-negative inventory across all database engines.
+  - Storefront catalog models (`ProductVariant`) stay synchronized in real time with active available stock across all fulfillment locations.
+  - Ready for Module M10: Cart and wishlist APIs.
+
+
+---
+
+## [Module M10] — Cart and Wishlist APIs
+- **Timestamp:** 2026-11-10T21:50:00+05:00
+- **Status:** Completed
+- **Scope & Actions:**
+  - Implemented database models in `backend/app/modules/cart/models.py`:
+    - `Cart`: Supports authenticated customer ownership (`user_id`, FK `users.id`, ondelete CASCADE) and guest anonymous sessions (`anonymous_token`, indexed). Includes `status` (`active`, `merged`, `converted_to_order`, `abandoned`) and timestamps.
+    - `CartItem`: Links cart to `product_variants.id` with `quantity` (default 1) and unique constraint `uq_cart_items_cart_variant`.
+    - `Wishlist`: Authenticated customer wishlist isolated to `user_id` (unique, FK `users.id`, ondelete CASCADE).
+    - `WishlistItem`: Links wishlist to bookmarked `products.id` with unique constraint `uq_wishlist_items_wishlist_product` and timestamp.
+  - Implemented Pydantic schemas in `backend/app/modules/cart/schemas.py`:
+    - `AddToCartRequest`, `UpdateCartItemRequest`, `MergeCartRequest`, `CartItemResponse` (with enriched product name, slug, variant SKU, size, color swatch, primary image URL, authoritative unit price, line total, available stock, availability status, and descriptive message), `CartResponse` (with subtotal, total items, free shipping threshold calculation, and amount needed), `AddToWishlistRequest`, `WishlistItemResponse`, and `WishlistResponse`.
+  - Implemented service layer in `backend/app/modules/cart/service.py`:
+    - `get_or_create_cart`: Resolves customer cart or guest anonymous cart, generating cryptographically secure `token_urlsafe(32)` tokens for guests.
+    - `build_cart_response`: Recalculates line item prices and subtotals exclusively from trusted backend catalog and variant records. Validates stock availability against active inventory counts, flags out-of-stock or inactive products, excludes unavailable items from active purchase subtotal, and calculates free-shipping qualification based on the PKR 15,000 threshold.
+    - `add_item_to_cart`: Rejects inactive products (400 `PRODUCT_UNAVAILABLE`) and out-of-stock variants (400 `OUT_OF_STOCK`). Idempotently combines duplicate line item quantities up to 99 units.
+    - `update_cart_item_quantity`: Updates line item quantity and deletes line items when quantity is set to 0. Enforces strict cart ownership isolation (rejects cross-cart modification with 404).
+    - `remove_cart_item` & `clear_cart`: Removes specific items or empties cart.
+    - `merge_guest_cart_into_user_cart`: Merges anonymous guest items into customer account cart upon login, combining quantities and setting guest cart status to `merged`.
+    - `get_or_create_wishlist`, `add_product_to_wishlist`, `remove_product_from_wishlist`, `clear_customer_wishlist`: Customer wishlist management.
+  - Added dependency helper in `backend/app/modules/auth/dependencies.py`:
+    - `get_optional_current_user`: Resolves authenticated `User` if valid JWT bearer is provided, returning `None` for anonymous guest requests without failing.
+  - Implemented REST routers in `backend/app/modules/cart/router.py`:
+    - `GET /api/v1/cart`: Retrieve active cart with server-calculated totals and `X-Anonymous-Cart-Token` response header for guests.
+    - `POST /api/v1/cart/items`: Add variant to cart.
+    - `PATCH /api/v1/cart/items/{item_id}`: Update line item quantity.
+    - `DELETE /api/v1/cart/items/{item_id}`: Remove line item.
+    - `DELETE /api/v1/cart`: Clear cart.
+    - `POST /api/v1/cart/merge`: Merge guest cart into customer account.
+    - `GET /api/v1/wishlist`: Retrieve customer saved items (`get_current_user`).
+    - `POST /api/v1/wishlist/items`: Bookmark product (`get_current_user`).
+    - `DELETE /api/v1/wishlist/items/{product_id}`: Remove product from wishlist (`get_current_user`).
+    - `DELETE /api/v1/wishlist`: Clear wishlist (`get_current_user`).
+    - Mounted in `backend/app/api/v1/router.py`.
+  - Database Migration:
+    - Generated revision `79afb81abaa2_create_cart_and_wishlist_tables.py` creating `carts`, `cart_items`, `wishlists`, and `wishlist_items` tables with indices and foreign key cascades.
+    - Verified offline MySQL DDL generation via `alembic upgrade head --sql`.
+    - Updated `backend/tests/test_migrations.py` head assertion to `79afb81abaa2`.
+  - Automated Tests in `backend/tests/test_cart.py`:
+    - Customer cart CRUD: item addition, authoritative price computation, line total calculation, free-shipping threshold evaluation, quantity update, zero-quantity deletion, and cart clearing.
+    - Availability and stock validation: out of stock variant addition rejected (400 `OUT_OF_STOCK`), inactive/draft product addition rejected (400 `PRODUCT_UNAVAILABLE`).
+    - Customer ownership isolation: Customer B cannot update or delete Customer A's cart items (returns 404).
+    - Guest cart lifecycle: anonymous visitor issued `X-Anonymous-Cart-Token`, guest item additions persist, and merging into customer account upon login succeeds while marking guest cart as `merged`.
+    - Customer wishlist lifecycle: unauthenticated access rejected (401), bookmarking products, idempotency on duplicate adds, item deletion, and wishlist clearing.
+- **Commands Executed:**
+  - `alembic revision -m "create_cart_and_wishlist_tables"`: Created migration `79afb81abaa2`.
+  - `pytest tests/test_migrations.py`: 3 passed in 0.55s.
+  - `pytest tests/test_cart.py`: 5 passed in 1.38s.
+  - `pytest`: Full test suite passed (**63 passed in 13.85s**).
+  - `npm run build`: Verified 33/33 Next.js static pages generated cleanly with 0 regressions.
+- **Verification Evidence:**
+  - 63/63 backend tests pass with 100% success rate across all 11 completed modules (M00–M10).
+  - Frontend production build compiles cleanly without errors or modifications.
+- **Decisions Recorded:**
+  - Client-submitted prices and totals are never trusted; all cart subtotals and discounts recalculate strictly from server database records.
+  - Anonymous guest shopping is supported via `X-Anonymous-Cart-Token` with zero-friction merge into customer account upon authentication.
+  - Wishlist functionality is strictly isolated to authenticated customers.
+  - Ready for Phase 3 (Order Lifecycle): Module M11 (Shipping configuration and quote).
+
+
+---
+
+## [Module M11] — Shipping Configuration and Quotes
+- **Timestamp:** 2026-11-10T22:00:00+05:00
+- **Status:** Completed
+- **Scope & Actions:**
+  - Implemented database models in `backend/app/modules/shipping/models.py`:
+    - `ShippingZone`: Regional delivery tier with `name`, unique `code` (`major_metro`, `nationwide`), `description`, `cities` (JSON-serialized list of serviced cities), and `is_active` toggle.
+    - `ShippingMethod`: Configurable delivery option with `name`, unique `code` (`standard_delivery`, `express_metro`), optional `zone_id` constraint (FK `shipping_zones.id`, ondelete SET NULL), `base_fee` (PKR 350.00 standard, PKR 750.00 express), `free_shipping_threshold` (PKR 15,000.00), transit SLA days (`estimated_days_min`/`max`), `is_cod_supported` toggle, `is_active` toggle, and `sort_order`.
+  - Implemented courier provider abstraction in `backend/app/modules/shipping/provider.py`:
+    - `BaseCourierProvider`: Abstract interface for carrier operations (`calculate_rate`, `verify_serviceability`).
+    - `ConfiguredRateCourierProvider`: Default logistics adapter calculating rates from database shipping method rules and free shipping thresholds.
+    - `MockThirdPartyCourierProvider`: Contracted tariff simulator for 3PL integrations (e.g. TCS / Leopards / Trax) ensuring courier integrations remain cleanly decoupled behind provider interfaces without hardcoding unverified live rates.
+  - Implemented Pydantic schemas in `backend/app/modules/shipping/schemas.py`:
+    - `DeliveryAddressValidationRequest` (with regex validator for standard Pakistani mobile formats: `03XXXXXXXXX` or `+923XXXXXXXXX`), `DeliveryAddressValidationResponse`, `ShippingZoneCreate`, `ShippingZoneUpdate`, `ShippingZoneResponse`, `ShippingMethodCreate`, `ShippingMethodUpdate`, `ShippingMethodResponse`, `ShippingQuoteRequest`, `ShippingMethodQuoteItem` (clear breakdown with `base_fee`, `discount`, `final_fee`, `is_free`, and `amount_needed_for_free_shipping`), and `ShippingQuoteResponse`.
+  - Implemented service layer in `backend/app/modules/shipping/service.py`:
+    - `ensure_default_shipping_configuration`: Bootstraps baseline Pakistani shipping zones (Major Metropolitan Hubs: Karachi, Lahore, Islamabad, Rawalpindi; Nationwide Outlying: Faisalabad, Multan, Peshawar, Quetta, Sialkot, etc.) and delivery methods (`standard_delivery` and `express_metro`).
+    - `resolve_zone_for_city`: Case-insensitive destination city lookup matching against active delivery zones.
+    - `validate_delivery_address`: Verifies address completeness, cleans and normalizes mobile numbers, and confirms domestic serviceability.
+    - `calculate_shipping_quote`: Resolves subtotal dynamically from active customer/guest cart (or request payload), filters methods by destination zone eligibility and COD support, calculates free-shipping discounts, and provides a clear breakdown.
+    - Administrative CRUD: `list_shipping_zones`, `create_shipping_zone`, `list_shipping_methods`, `create_shipping_method`, `update_shipping_method` with audit logging via `log_audit_event`.
+  - Enhanced audit logging in `backend/app/modules/audit/service.py`:
+    - Added `default=str` serialization to `json.dumps` to cleanly handle `Decimal` and date objects across operational audit events.
+  - Implemented REST routers in `backend/app/modules/shipping/router.py`:
+    - `POST /api/v1/shipping/quote`: Public delivery quote calculation.
+    - `POST /api/v1/shipping/validate-address`: Public address and phone validation.
+    - `GET /api/v1/shipping/methods`: Public active shipping options.
+    - `GET /api/v1/admin/shipping/zones`: Admin list shipping zones (`settings.manage`).
+    - `POST /api/v1/admin/shipping/zones`: Admin create shipping zone (`settings.manage`).
+    - `GET /api/v1/admin/shipping/methods`: Admin list all shipping methods (`settings.manage`).
+    - `POST /api/v1/admin/shipping/methods`: Admin create shipping method (`settings.manage`).
+    - `PATCH /api/v1/admin/shipping/methods/{method_id}`: Admin update shipping method (`settings.manage`).
+    - Mounted in `backend/app/api/v1/router.py`.
+  - Database Migration:
+    - Generated revision `61e5fd2f0ee5_create_shipping_tables.py` creating `shipping_zones` and `shipping_methods` tables with foreign keys, constraints, and indexes.
+    - Verified offline MySQL DDL generation via `alembic upgrade head --sql`.
+    - Updated `backend/tests/test_migrations.py` head assertion to `61e5fd2f0ee5`.
+  - Automated Tests in `backend/tests/test_shipping.py`:
+    - Quote calculation: fee of PKR 350.00 applied under 15k with `amount_needed_for_free_shipping = 6500.00`; free shipping (PKR 0.00) applied over 15k.
+    - Dynamic cart resolution: quote calculates subtotal directly from active customer cart.
+    - Zone filtering: Express courier offered in Major Metros (Karachi, Lahore) and excluded in outlying cities (Multan).
+    - Address validation: valid phone formats normalized (`0300-1234567` -> `03001234567`), invalid phone formats rejected with 422.
+    - Courier provider abstraction: verified `ConfiguredRateCourierProvider` and `MockThirdPartyCourierProvider`.
+    - Administrative management & RBAC: customer rejected (403), admin updates base fee, and changes immediately reflect in public quote calculation.
+- **Commands Executed:**
+  - `alembic revision -m "create_shipping_tables"`: Created migration `61e5fd2f0ee5`.
+  - `pytest tests/test_migrations.py`: 3 passed in 0.46s.
+  - `pytest tests/test_shipping.py`: 6 passed in 1.39s.
+  - `pytest`: Full test suite passed (**69 passed in 15.21s**).
+  - `npm run build`: Verified 33/33 Next.js static pages generated cleanly with 0 regressions.
+- **Verification Evidence:**
+  - 69/69 backend tests pass with 100% success rate across all 12 completed modules (M00–M11).
+  - Frontend production build compiles cleanly without errors or modifications.
+- **Decisions Recorded:**
+  - Standard base delivery fee fixed at PKR 350.00 with complimentary nationwide delivery threshold at PKR 15,000.00, fully matching storefront brand guidelines and copy in `src/app/shipping-delivery/page.tsx`.
+  - Courier integrations remain strictly behind `BaseCourierProvider` interface; no hardcoded third-party carrier rates are assumed.
+  - Ready for Module M12: Checkout and order creation.
+
+
+---
+
+## [Module M12] — Checkout and Order Creation
+- **Timestamp:** 2026-11-10T22:55:00+05:00
+- **Status:** Completed
+- **Scope & Actions:**
+  - Implemented database models in `backend/app/modules/orders/models.py`:
+    - `Order`: Primary customer purchase order header capturing human-readable reference code `order_number` (e.g. `UNV-YYYYMMDD-XXXXXX`), customer account reference (`user_id`, nullable for guest checkout), customer contact credentials (`customer_email`, `customer_phone`, `customer_name`), lifecycle status (`pending_confirmation`, `confirmed`, `processing`, `packed`, `shipped`, `delivered`, `return_requested`, `returned`, `cancelled`, `refunded`), payment status (`unpaid`, `partially_paid`, `paid`, `refunded`), fulfillment status (`unfulfilled`, `partially_fulfilled`, `fulfilled`, `returned`), payment method (`cod`, `card`), currency (`PKR`), financial breakdown (`subtotal`, `discount_total`, `shipping_total`, `tax_total`, `grand_total`), immutable JSON snapshots of delivery address and billing address, selected shipping method details, customer delivery instructions, and placement timestamps.
+    - `OrderItem`: Immutable line item snapshot preserving garment title, slug, SKU, size, color description, unit purchase price, quantity, line discount, and calculated line total regardless of subsequent catalogue alterations.
+    - `OrderStatusHistory`: Immutable audit ledger tracking state machine status changes (`from_status`, `to_status`, `note`, `changed_by_user_id`, and `created_at`).
+    - `CheckoutIdempotency`: Idempotency registry recording `idempotency_key`, `user_id`, SHA-256 `request_fingerprint`, `order_id`, `order_number`, serialized `response_payload`, and TTL expiration (`expires_at`).
+  - Implemented Pydantic schemas in `backend/app/modules/orders/schemas.py`:
+    - `AddressSnapshot` with Pakistani mobile format validation (`03XXXXXXXXX` / `+923XXXXXXXXX`).
+    - `CheckoutRequest` with customer contact information, delivery address, shipping method code, payment method, optional coupon code, optional delivery note, and optional idempotency key.
+    - `OrderItemResponse`, `OrderStatusHistoryResponse`, `OrderResponse`, `OrderListResponse`, and `OrderStatusUpdateRequest`.
+  - Implemented core business logic in `backend/app/modules/orders/service.py`:
+    - Explicit order lifecycle transition map (`ALLOWED_STATUS_TRANSITIONS`) ensuring strict unidirectional workflow with terminal states.
+    - Order reference generation via `generate_order_number()` producing uniform `UNV-YYYYMMDD-XXXXXX` references matching the Next.js storefront pattern in `src/app/checkout/success/page.tsx`.
+    - Request payload fingerprinting via `compute_request_fingerprint()` (SHA-256 hash).
+    - Idempotency guarantee: Re-submitting the exact same checkout payload with an active key replays the cached order response without double-booking inventory. Reusing a key with altered parameters raises `409 Conflict` (`IDEMPOTENCY_CONFLICT`).
+    - Server-side authoritative pricing and availability check: Cart items are validated for stock availability and prices are recomputed exclusively from catalogue records; client-submitted totals are never trusted.
+    - Address and shipping fee verification: Resolves authoritative delivery charges against shipping zones and evaluates free shipping thresholds.
+    - Physical stock reservation: Executes atomic `reserve_stock()` from Module M09 within the transactional boundary. If inventory reservation fails, the transaction rolls back cleanly without creating an order.
+    - Initial order payment status: Orders are strictly created with `payment_status="unpaid"` and `fulfillment_status="unfulfilled"` regardless of payment method.
+    - Automatic cancellation restock: When an order status transitions to `cancelled`, `update_order_status()` triggers `release_stock()` from Module M09 to automatically restore reserved units back to available stock.
+    - Customer isolation: `get_order_by_number()` and `list_orders()` enforce customer ownership isolation (`user_id == current_user.id`), returning 404 for unauthorized order reference lookups.
+  - Implemented REST router endpoints in `backend/app/modules/orders/router.py`:
+    - `POST /api/v1/orders/checkout`: Storefront order creation from active customer or guest cart (supports idempotency key via JSON body or HTTP `Idempotency-Key` header).
+    - `GET /api/v1/orders/{order_number}`: Storefront order confirmation lookup by reference code (enforces customer boundary).
+    - `GET /api/v1/customer/orders`: Customer purchase order history.
+    - `GET /api/v1/admin/orders`: Administrative work queue with status and search filters (`orders.read`).
+    - `PATCH /api/v1/admin/orders/{order_id}/status`: Administrative lifecycle state machine update (`orders.update`).
+    - Registered routers in `backend/app/api/v1/router.py`.
+  - Database Migration:
+    - Generated Alembic revision `cdade44decfd_create_orders_and_checkout_tables.py` creating `orders`, `order_items`, `order_status_history`, and `checkout_idempotency` tables with all constraints and indices.
+    - Updated `backend/tests/test_migrations.py` head assertion to `cdade44decfd`.
+  - Automated Tests in `backend/tests/test_orders.py` (12 comprehensive tests):
+    - `test_checkout_authenticated_customer_success`: Authenticated customer checkout, free shipping qualification (subtotal > 15k), immutable snapshots, stock reservation, unpaid payment state, and cart clearing.
+    - `test_checkout_guest_anonymous_success`: Guest checkout with `X-Anonymous-Cart-Token`, standard delivery fee calculation (subtotal < 15k), and empty cart verification.
+    - `test_checkout_empty_cart_fails`: Checkout with empty cart rejected with 400 (`CART_EMPTY`).
+    - `test_checkout_idempotency_replay_identical_payload`: Idempotent replay returns cached order without double-reserving inventory.
+    - `test_checkout_idempotency_conflict_different_payload`: Key reuse with altered payload rejected with 409 (`IDEMPOTENCY_CONFLICT`).
+    - `test_checkout_insufficient_stock_fails`: Out-of-stock items rejected with 400 and rolled back cleanly.
+    - `test_order_retrieval_and_customer_isolation`: Customer A retrieves own order; Customer B accessing Customer A's order receives 404; customer order lists remain strictly isolated.
+    - `test_order_lifecycle_transitions_and_cancellation_restock`: State machine progression (`pending_confirmation` -> `confirmed` -> `processing`), invalid skip rejection (400), cancellation releases held stock back to available inventory pool, and revival of cancelled order rejected.
+    - `test_admin_orders_rbac_access_control`: RBAC protection on administrative endpoints (401 unauthenticated, 403 customer, 200 store admin).
+    - `test_checkout_header_idempotency_key`: Support for `Idempotency-Key` passed via HTTP request headers.
+    - `test_checkout_validation_failures`: Rejection of malformed phone numbers (422) and non-existent shipping method codes (400).
+    - `test_admin_order_search_and_lifecycle_completion`: Administrative order search by order number, status filtering, and full 8-step lifecycle progression to `refunded`.
+- **Commands Executed:**
+  - `alembic revision -m "create_orders_and_checkout_tables"`: Created migration `cdade44decfd`.
+  - `pytest tests/test_migrations.py`: 3 passed in 0.57s.
+  - `pytest tests/test_orders.py`: 12 passed in 4.18s.
+  - `pytest`: Full test suite passed (**81 passed in 19.58s**).
+  - `npm run build`: Verified 33/33 Next.js static pages generated cleanly with 0 regressions.
+- **Verification Evidence:**
+  - 81/81 backend tests pass with 100% success rate across all completed modules (M00–M12).
+  - Frontend production build compiles cleanly without errors or modifications.
+- **Decisions Recorded:**
+  - Order numbers are strictly formatted as `UNV-YYYYMMDD-XXXXXX` (e.g. `UNV-20261110-847291`) matching the storefront design contract.
+  - Orders are always initialized with `payment_status="unpaid"` and `fulfillment_status="unfulfilled"`; creation never marks an order as paid. Payment execution remains completely separate.
+  - Reserved inventory is safely released back to available stock if an order is cancelled.
+  - Ready for Module M13: COD workflow.
+
+
+---
+
+## [Module M13] — Cash on Delivery (COD) Workflow
+- **Timestamp:** 2026-11-10T23:36:00+05:00
+- **Status:** Completed
+- **Scope & Actions:**
+  - Implemented database models in `backend/app/modules/payments/models.py`:
+    - `Payment`: Financial ledger entity tracking `order_id` (FK `orders.id`, ondelete CASCADE), `payment_method` (`cod`, `card`), `provider_code` (`cod`), `provider_reference` (consignment/AWB or gateway charge reference), lifecycle `status` (`pending`, `confirmed`, `dispatched`, `collected`, `partially_collected`, `reconciled`, `failed`, `cancelled`), `currency_code` (`PKR`), monetary breakdown (`amount`, `amount_collected`, `amount_outstanding = amount - amount_collected`), timestamps (`initiated_at`, `confirmed_at`, `dispatched_at`, `collected_at`, `reconciled_at`), reconciliation staff tracking (`reconciled_by_user_id`), courier settlement remittance reference (`settlement_reference`), operational notes, and relationships (`order`, `transactions`, `reconciled_by`).
+    - `PaymentTransaction`: Immutable transaction event ledger logging `payment_id`, `order_id`, `action` (`initiated`, `confirmed`, `dispatched`, `collected`, `partially_collected`, `reconciled`, `failed`, `cancelled`), incremental monetary value `amount`, `collected_by` (courier name or rider), `reference` (consignment tracking number or bank remittance voucher), `notes`, `recorded_by_user_id`, and `created_at`.
+  - Linked `Order` model in `backend/app/modules/orders/models.py` with `payments` relationship.
+  - Implemented Pydantic schemas in `backend/app/modules/payments/schemas.py`:
+    - `PaymentTransactionResponse`, `PaymentResponse`, `PaymentListResponse`, `CODConfirmationRequest`, `CODDispatchRecordRequest`, `CODCollectionRecordRequest`, `CODReconciliationRequest`, and `CODCancellationRequest`.
+  - Implemented service layer in `backend/app/modules/payments/service.py`:
+    - `create_initial_payment_for_order`: Transactionally initializes a `Payment` in `status="pending"` and `PaymentTransaction` with action `"initiated"` upon order checkout.
+    - Decoupled payment status from order status: An order placed using COD is strictly initialized with `Order.payment_status="unpaid"` and `Payment.status="pending"`. Placing, confirming, or dispatching an order never marks it as paid.
+    - `confirm_cod_payment`: Validates pending state, sets `Payment.status="confirmed"`, synchronizes `Order.status="confirmed"` if currently `pending_confirmation`, and keeps `Order.payment_status="unpaid"`.
+    - `record_cod_dispatch`: Records courier name, dispatch timestamp, and tracking number (`provider_reference`), transitions `Payment.status="dispatched"`, advances `Order.status="shipped"` if in fulfillment pipeline, and keeps `Order.payment_status="unpaid"`.
+    - `record_cod_collection`: Records verified cash collection; increments `amount_collected`; computes outstanding balance; transitions `Payment.status="collected"` (or `"partially_collected"`) and synchronizes `Order.payment_status="paid"` (or `"partially_paid"`); advances `Order.status="delivered"` if currently shipped. Rejects collection exceeding outstanding balance with 400 Bad Request.
+    - `reconcile_cod_payment`: Authorized finance operator reconciles courier remittance settlement advice against collected cash; sets `Payment.status="reconciled"`, `reconciled_at`, and `reconciled_by_user_id`. Premature reconciliation before cash collection is rejected with 400 Bad Request.
+    - `cancel_cod_payment`: Cancels uncollected COD payment, sets `Payment.status="cancelled"`, transitions `Order.status="cancelled"`, and automatically releases reserved inventory units back to available stock via M09. Prevents cancellation of already collected or reconciled payments.
+    - Audit logging: Comprehensive audit trail recorded via `log_audit_event` for `payment.initiated`, `payment.cod_confirmed`, `payment.cod_dispatched`, `payment.cod_collected`, `payment.cod_reconciled`, and `payment.cod_cancelled`.
+  - Defined RBAC role `finance_operator` in `backend/app/modules/rbac/permissions.py`:
+    - Added standard role `finance_operator` with `payments.read`, `payments.reconcile`, `refunds.create`, `dashboard.read`, and `orders.read`.
+  - Implemented REST router endpoints in `backend/app/modules/payments/router.py`:
+    - `GET /api/v1/customer/payments/order/{order_number}`: Customer payment status lookup (ownership isolated).
+    - `POST /api/v1/customer/payments/order/{order_number}/confirm-cod`: Customer COD self-confirmation.
+    - `GET /api/v1/admin/payments`: Administrative search and filtering (`payments.read`).
+    - `GET /api/v1/admin/payments/{payment_id}`: Payment detail and transaction ledger (`payments.read`).
+    - `GET /api/v1/admin/payments/order/{order_id}`: Payment lookup by order ID (`payments.read`).
+    - `POST /api/v1/admin/payments/{payment_id}/confirm-cod`: Staff COD confirmation (`orders.update`).
+    - `POST /api/v1/admin/payments/{payment_id}/dispatch`: Record courier dispatch (`orders.update`).
+    - `POST /api/v1/admin/payments/{payment_id}/record-collection`: Record cash collection (`payments.reconcile`).
+    - `POST /api/v1/admin/payments/{payment_id}/reconcile`: Reconcile courier remittance settlement (`payments.reconcile`).
+    - `POST /api/v1/admin/payments/{payment_id}/cancel`: Cancel COD order and release inventory (`orders.cancel`).
+    - Mounted in `backend/app/api/v1/router.py`.
+  - Database Migration:
+    - Generated Alembic revision `16d42444d379_create_payments_and_transactions_tables.py` creating `payments` and `payment_transactions` tables with all columns, indices, and foreign keys.
+    - Updated `backend/tests/test_migrations.py` head assertion to `16d42444d379`.
+  - Automated Tests in `backend/tests/test_cod_payments.py` (9 comprehensive tests):
+    - `test_cod_order_placement_creates_unpaid_payment_record`: Unpaid payment record initialized on checkout.
+    - `test_customer_payment_lookup_and_isolation`: Customer isolation enforced; cross-customer access returns 404.
+    - `test_customer_self_confirmation_flow`: Customer self-confirmation transitions state while remaining unpaid.
+    - `test_admin_cod_dispatch_and_full_collection`: Admin confirmation, courier dispatch, cash collection, order marked paid and delivered.
+    - `test_admin_partial_cash_collection`: Partial cash collection, outstanding balance tracking, order marked partially_paid, excess collection rejected.
+    - `test_courier_remittance_reconciliation`: Finance operator reconciles courier settlement voucher; premature reconciliation rejected.
+    - `test_cod_cancellation_releases_stock`: Order cancellation releases reserved physical stock back to available pool.
+    - `test_cod_payments_rbac_enforcement`: RBAC access control (401 unauthenticated, 403 customer, 403 staff without `payments.reconcile`).
+    - `test_admin_list_and_search_payments`: Admin search by order reference and status filter.
+- **Commands Executed:**
+  - `alembic revision -m "create_payments_and_transactions_tables"`: Created migration `16d42444d379`.
+  - `pytest tests/test_migrations.py`: 3 passed in 5.08s.
+  - `pytest tests/test_cod_payments.py`: 9 passed in 22.78s.
+  - `pytest tests/test_orders.py`: 12 passed in 26.59s.
+  - `pytest`: Full test suite passed (**90 passed in 152.73s**).
+  - `npm run build`: Verified 33/33 Next.js static pages generated cleanly with 0 regressions.
+- **Verification Evidence:**
+  - 90/90 backend tests pass with 100% success rate across all 14 completed modules (M00–M13).
+  - Frontend production build compiles cleanly without errors or modifications.
+- **Decisions Recorded:**
+  - Cash on Delivery is treated as a first-class payment method with full auditability and state transitions. Placing, confirming, or dispatching a COD order never marks it as paid. Payment status only moves to `paid` upon verified cash collection.
+  - Reconciling courier remittances requires the granular `payments.reconcile` permission, preventing operational staff from making unauthorized financial modifications.
+  - Ready for Module M14: Online payment adapter foundation.
+
+
+## 2026-11-11 — Module M14: Online Payment Adapter Foundation
+- **Scope & Objectives:**
+  - Define a provider-independent payment interface and adapter contract.
+  - Implement payment initiation, verification, webhook parsing, and refund processing abstraction.
+  - Reject fake payment success and unconfigured gateways in Pakistan (`UnconfiguredPaymentProvider`).
+  - Implement HMAC-SHA256 signature verification and replay protection.
+  - Enforce webhook callback idempotency and prevent duplicate payment processing.
+  - Track raw webhook callbacks in `payment_events` table and handle refunds via `refunds` ledger.
+  - Document integration process and Pakistani gateway ecosystem in `docs/backend/PAYMENT_PROVIDER_INTEGRATION_GUIDE.md`.
+- **Implementation Deliverables:**
+  - `backend/app/core/config.py`:
+    - Added settings: `ONLINE_PAYMENT_PROVIDER`, `PAYMENT_WEBHOOK_SECRET`, `PAYMENT_GATEWAY_API_KEY`, `PAYMENT_GATEWAY_MERCHANT_ID`, and `PAYMENT_GATEWAY_BASE_URL`.
+  - `.env.example`:
+    - Documented Section 7 for Online Payment Providers in Pakistan context (Safepay, PayFast, JazzCash, EasyPaisa).
+  - Models (`backend/app/modules/payments/models.py`):
+    - Added `PaymentEvent` model tracking `provider_code`, `provider_event_id`, `signature_verified`, `payload`, `processing_status`, and `error_message`.
+    - Added `Refund` model tracking `refund_number` (`RFD-...`), `amount`, `status`, `provider_reference`, `reason`, and `notes`.
+  - Provider Abstraction (`backend/app/modules/payments/provider.py`):
+    - Defined normalized results: `PaymentInitiationResult`, `PaymentVerificationResult`, `WebhookEventPayload`, `RefundResult`.
+    - Defined `BasePaymentProvider(ABC)`.
+    - Implemented `CodPaymentProvider` for Cash on Delivery.
+    - Implemented `MockOnlinePaymentProvider` for integration test harness with HMAC-SHA256 signature verification.
+    - Implemented `UnconfiguredPaymentProvider` which strictly rejects payment attempts with HTTP 400 (`ONLINE_PAYMENT_NOT_CONFIGURED`) when active gateway credentials are not configured.
+    - Implemented factory `get_payment_provider()`.
+  - Service Layer (`backend/app/modules/payments/service.py`):
+    - `initiate_online_payment`: Initializes checkout session, obtains provider tracking reference and redirect URL, updates payment record and logs audit trail.
+    - `process_webhook_callback`: Validates HMAC signature, prevents duplicate callbacks via idempotency check on `(provider_code, provider_event_id)`, records `payment_events`, transitions payment to `paid` or `failed`, appends `PaymentTransaction`, and marks Order as `paid`.
+    - `create_payment_refund`: Validates refund does not exceed collected funds, executes provider refund, records `Refund` and `PaymentTransaction`, updates balances and statuses (`partially_refunded` or `refunded`).
+    - `list_payment_refunds` and `list_payment_events`: Auditing endpoints.
+  - API Endpoints (`backend/app/modules/payments/router.py`):
+    - `POST /api/v1/payments/webhooks/{provider_code}`: Public webhook callback handler.
+    - `POST /api/v1/customer/payments/initiate`: Customer payment initiation session.
+    - `POST /api/v1/admin/payments/{payment_id}/refund`: Admin/Staff refund execution (`refunds.create`).
+    - `GET /api/v1/admin/payments/{payment_id}/refunds`: Admin refund records listing (`payments.read`).
+    - `GET /api/v1/admin/payments/events/audit`: Admin audit log of webhook events (`payments.read`).
+  - Migration:
+    - Generated revision `073a8073cb18_create_payment_events_and_refunds_tables.py` creating `payment_events` and `refunds` tables with all FKs and indices.
+    - Updated `backend/tests/test_migrations.py` head assertion to `073a8073cb18`.
+  - Architecture Guide:
+    - Authored `docs/backend/PAYMENT_PROVIDER_INTEGRATION_GUIDE.md` detailing gateway landscape in Pakistan (Safepay, PayFast, JazzCash, EasyPaisa, HBL Pay), SBP PSO/PSP compliance, 3DS2 requirements, and step-by-step gateway integration.
+  - Automated Tests (`backend/tests/test_online_payments.py`):
+    - 9 comprehensive test cases covering factory resolution, unconfigured gateway rejection, mock provider initiation, cross-customer isolation, HMAC signature verification, webhook processing, duplicate prevention, refund ledger (partial and full), and RBAC access controls.
+- **Commands Executed & Verification:**
+  - `alembic revision -m "create_payment_events_and_refunds_tables"`: Created migration `073a8073cb18`.
+  - `pytest backend/tests/test_migrations.py`: 3 passed in 2.28s.
+  - `pytest backend/tests/test_online_payments.py`: 9 passed in 8.07s.
+  - `pytest backend/tests`: 99 passed in 76.05s (**100% test pass rate across all modules M00-M14**).
+  - `npm run build`: 33/33 static pages generated cleanly with 0 frontend regressions.
+- **Decisions Recorded:**
+  - Online payments default to `ONLINE_PAYMENT_PROVIDER=none`, which attaches `UnconfiguredPaymentProvider`. Any attempt to initiate online payments when unconfigured rejects with 400 Bad Request (`ONLINE_PAYMENT_NOT_CONFIGURED`). Fake successful payments or mock gateways are forbidden from running in production.
+  - Webhooks enforce HMAC-SHA256 signature verification and idempotency based on `(provider_code, provider_event_id)` to prevent replay attacks and duplicate balance crediting.
+  - Ready for Module M15: Fulfillment and shipment tracking.
+
+
+## 2026-11-11 — Module M15: Fulfillment and Shipment Tracking
+- **Scope & Objectives:**
+  - Define shipment domain models (`shipments`, `shipment_items`, `shipment_events`).
+  - Support parcel creation, carrier assignment, and tracking references (Airway Bill / Consignment Note).
+  - Support split and partial fulfillment of order items across multiple shipments.
+  - Implement fulfillment status progression state machine (`allocated` -> `packing` -> `packed` -> `ready_for_pickup` -> `dispatched` -> `in_transit` -> `out_for_delivery` -> `delivered`, with terminal and exception handling for `delivery_failed`, `returned_to_origin`, and `cancelled`).
+  - Synchronize parent order status (`packed`, `shipped`, `delivered`) and fulfillment status (`unfulfilled`, `partially_fulfilled`, `fulfilled`).
+  - Define carrier provider adapter interface (`BaseCourierTrackingProvider`) with support for major Pakistani logistics networks (TCS, Leopards, Trax, Call Courier, PostEx, M&P) without inventing credentials or claiming fake live automated APIs.
+  - Support manual tracking updates, physical checkpoints, and staff attribution.
+  - Preserve complete order history via `order_status_history` and structured audit logs.
+  - Enforce RBAC permissions (`shipments.manage`, `orders.read`, `orders.update`) and customer ownership isolation.
+- **Implementation Deliverables:**
+  - Domain Models (`backend/app/modules/fulfillment/models.py`):
+    - `Shipment`: Tracks `shipment_number` (`SHP-YYYYMMDD-XXXXXX`), `order_id`, `courier_code`, `courier_name`, `tracking_number`, `tracking_url`, `status`, `shipping_method_code`, `shipping_address_snapshot`, `destination_city`, `total_weight_grams`, `package_count`, `cod_amount_to_collect`, `dispatch_notes`, and lifecycle timestamps (`allocated_at`, `packed_at`, `dispatched_at`, `estimated_delivery_at`, `delivered_at`).
+    - `ShipmentItem`: Tracks `shipment_id`, `order_item_id`, `quantity`, and snapshots (`product_name_snapshot`, `sku_snapshot`, `size_snapshot`, `color_snapshot`).
+    - `ShipmentEvent`: Immutable audit ledger of physical tracking checkpoints with `status`, `location`, `description`, `source`, `recorded_by_user_id`, `occurred_at`, and `notes`.
+  - Order Model Update (`backend/app/modules/orders/models.py`):
+    - Linked `Order.shipments` relationship with cascade deletion and eager loading.
+  - Courier Provider Interface (`backend/app/modules/fulfillment/provider.py`):
+    - `BaseCourierTrackingProvider(ABC)`: Contracts for consignment booking, tracking URL generation, and tracking inquiries.
+    - `ManualCourierProvider`: Standard Pakistan courier adapter for physical CN/AWB booking with URL templates for TCS, Leopards, Trax, Call Courier, PostEx, and M&P.
+    - `MockCourierProvider`: Test harness carrier adapter generating `MOCK-CN-...` consignments and simulated multi-stop tracking events.
+    - `UnconfiguredCourierProvider`: Strictly rejects automated third-party API booking with HTTP 400 (`COURIER_API_NOT_CONFIGURED`) when active API credentials are not configured.
+    - `get_courier_provider()`: Factory resolving active carrier adapter.
+  - Schemas (`backend/app/modules/fulfillment/schemas.py`):
+    - `ShipmentCreateRequest`, `ShipmentItemAllocationRequest`, `ShipmentStatusUpdateRequest`, `ShipmentTrackingUpdateRequest`, `ShipmentEventCreateRequest`, `ShipmentResponse`, `ShipmentListResponse`, and `OrderTrackingTimelineResponse`.
+  - Service Layer (`backend/app/modules/fulfillment/service.py`):
+    - `create_shipment_for_order`: Item allocation validation (prevents over-allocation), courier consignment generation, COD collection calculation, shipment record and event creation, order fulfillment status transition (`partially_fulfilled` or `fulfilled`), and order history logging.
+    - `update_shipment_status`: State transition matrix enforcement, lifecycle timestamp recording, parent order status synchronization (`packed`, `shipped`, `delivered`), and order history preservation.
+    - `update_shipment_tracking`: Carrier assignment and AWB tracking update with public tracking URL recalculation.
+    - `record_shipment_event`: Manual physical checkpoint recording without advancing status.
+    - `list_shipments` and `get_shipment_by_id`: Search, filter, and detail views for staff queues.
+    - `get_order_tracking_timeline`: Customer tracking view with ownership verification and guest phone check.
+  - API Endpoints (`backend/app/modules/fulfillment/router.py` & `orders/router.py`):
+    - `GET /api/v1/orders/{order_number}/tracking`: Public/guest tracking with phone verification.
+    - `GET /api/v1/customer/orders/{order_number}/tracking`: Authenticated customer tracking.
+    - `POST /api/v1/admin/orders/{order_id}/shipments`: Create shipment (`shipments.manage`).
+    - `GET /api/v1/admin/orders/{order_id}/shipments`: Order shipments listing (`orders.read`).
+    - `GET /api/v1/admin/shipments`: Work queue search and filtering (`orders.read`).
+    - `GET /api/v1/admin/shipments/{shipment_id}`: Shipment detail (`orders.read`).
+    - `PATCH /api/v1/admin/shipments/{shipment_id}/status`: Status transition (`shipments.manage`).
+    - `PATCH /api/v1/admin/shipments/{shipment_id}/tracking`: Carrier/tracking update (`shipments.manage`).
+    - `POST /api/v1/admin/shipments/{shipment_id}/events`: Record tracking checkpoint (`shipments.manage`).
+    - `GET /api/v1/admin/orders/{order_ref}`: Administrative order inspection by ID or number (`orders.read`).
+  - Database Migration:
+    - Generated Alembic revision `71ea9085ba8d_create_fulfillment_and_shipment_tables.py` creating `shipments`, `shipment_items`, and `shipment_events` tables with all FKs and indices.
+    - Updated `backend/tests/test_migrations.py` head assertion to `71ea9085ba8d`.
+  - Automated Tests (`backend/tests/test_fulfillment.py`):
+    - 7 comprehensive tests covering provider factory, shipment creation, split fulfillment, status state machine progression, manual tracking checkpoints, customer/guest tracking isolation, and RBAC enforcement.
+- **Commands Executed & Verification:**
+  - `alembic revision -m "create_fulfillment_and_shipment_tables"`: Created migration `71ea9085ba8d`.
+  - `pytest backend/tests/test_migrations.py`: 3 passed in 0.98s.
+  - `pytest backend/tests/test_fulfillment.py`: 7 passed in 8.36s.
+  - `pytest backend/tests`: 106 passed in 84.81s (**100% pass rate across all 16 modules M00–M15**).
+  - `npm run build`: 33/33 static pages generated cleanly with 0 frontend regressions.
+- **Decisions Recorded:**
+  - Fulfillment status transitions strictly mirror real-world Pakistani logistics operations. Courier integrations default to physical consignment note and manual tracking (`ManualCourierProvider`) with verified tracking URL schemas for TCS, Leopards, Trax, Call Courier, PostEx, and M&P. Attempting to call automated live courier APIs when unconfigured is rejected (`UnconfiguredCourierProvider`).
+  - Split fulfillment is supported: an order's `fulfillment_status` moves to `partially_fulfilled` until all ordered units are allocated to active shipments, at which point it becomes `fulfilled`.
+  - Stopped after M15 as instructed.
+
+
+---
+
+## [Module M16] — Returns, Exchanges, and Refunds
+- **Timestamp:** 2026-11-11T12:25:00+05:00
+- **Status:** Completed
+- **Scope & Tasks:**
+  - Define return and exchange domain models (`return_requests`, `return_items`).
+  - Support return reasons (`damaged`, `defective`, `wrong_item`, `size_fit`, `not_as_described`, `changed_mind`) and item-level requested quantities.
+  - Enforce UniNova return eligibility policy: order must be in `delivered` status, request must be placed within 14 calendar days of delivery, and requested return quantities cannot exceed unreturned delivered units.
+  - Implement request review workflows (`pending_review` -> `approved` or `rejected` with mandatory rejection justification).
+  - Implement physical warehouse receipt tracking (`in_transit` -> `received`) and quality inspection checkpoints (`inspected`).
+  - Assess garment condition (`unopened`, `like_new`, `damaged`, `altered`, `missing_tags`) and restock actions (`restock_available`, `damaged_writeoff`, `return_to_customer`).
+  - Execute transactional stock restock for items deemed `restock_available` via inventory service (`StockAdjustmentRequest` with reason `return`).
+  - Implement doorstep exchange resolution: allocate replacement variant SKU and book zero-fee replacement parcel with courier partner (`ManualCourierProvider` / `TCS`).
+  - Support online payment refunds via provider adapter (`RefundCreateRequest` through `create_payment_refund`).
+  - Implement Cash on Delivery (COD) refund handling as a documented operational process (`docs/backend/COD_REFUND_OPERATIONAL_GUIDE.md`) requiring verified manual payout reference (1LINK bank IMD/FT reference or JazzCash/EasyPaisa wallet ID) without ever automatically releasing unverified money.
+  - Preserve complete order history via `order_status_history` and record structured audit logs for every state change.
+  - Enforce RBAC permissions (`returns.read`, `returns.review`, `returns.resolve`, `refunds.create`) and customer ownership isolation.
+- **Implementation Deliverables:**
+  - Domain Models (`backend/app/modules/returns/models.py`):
+    - `ReturnRequest`: Tracks `request_number` (`RET-YYYYMMDD-XXXXXX`), `order_id` (disambiguated primary join), `replacement_order_id`, `customer_id`, `status` (`pending_review`, `approved`, `rejected`, `in_transit`, `received`, `inspected`, `completed`, `cancelled`), `request_type` (`return`, `exchange`), `resolution_type` (`refund`, `exchange`, `store_credit`), `refund_payout_method`, `refund_id`, `total_refund_amount`, customer notes, staff notes, rejection reason, payout account snapshot, and lifecycle timestamps.
+    - `ReturnItem`: Tracks `return_request_id`, `order_item_id`, `exchange_variant_id`, `quantity`, `reason`, `condition_notes`, `inspection_status` (`pending`, `passed`, `failed`), `restock_condition`, `restock_action`, `inspector_notes`, `restocked_quantity`, and `refund_amount`.
+  - Relationship Updates (`backend/app/modules/orders/models.py`):
+    - Added `Order.returns` relationship with explicit `primaryjoin="Order.id == ReturnRequest.order_id"`.
+  - RBAC Updates (`backend/app/modules/rbac/permissions.py`):
+    - Added `"returns.resolve"` permission to `customer_support` role.
+  - Schemas (`backend/app/modules/returns/schemas.py`):
+    - `ReturnItemCreateRequest`, `ReturnRequestCreatePayload`, `ReturnReviewRequest`, `ReturnReceiveRequest`, `ReturnInspectionItemRequest`, `ReturnInspectionRequest`, `ReturnRefundResolveRequest`, `ReturnExchangeResolveRequest`, `ReturnItemResponse`, `ReturnRequestResponse`, `ReturnRequestListResponse`.
+  - Service Layer (`backend/app/modules/returns/service.py`):
+    - `create_return_request`: Validates delivery status, 14-day window, item quantities, and bank/wallet snapshot for COD refunds.
+    - `review_return_request`: Enforces approval/rejection transitions with mandatory staff justification.
+    - `receive_returned_items`: Records warehouse physical parcel receipt milestone.
+    - `inspect_returned_items`: Evaluates condition of each line item, restocks active stock for passed garments, and totals approved refund.
+    - `resolve_return_refund`: Executes refund via online gateway adapter or verifies manual 1LINK/wallet payout reference for COD orders.
+    - `resolve_return_exchange`: Books replacement courier parcel with carrier partner and updates order status.
+    - `list_admin_returns` & `get_return_request_by_id`: Search, filter, and detail views for staff queues.
+    - `list_customer_returns` & `list_guest_returns`: Secure customer/guest return status lookup.
+  - API Endpoints (`backend/app/modules/returns/router.py`):
+    - `POST /api/v1/orders/{order_number}/returns`: Guest return initiation with phone verification.
+    - `GET /api/v1/orders/{order_number}/returns`: Guest return inquiry.
+    - `POST /api/v1/customer/orders/{order_number}/returns`: Authenticated customer return initiation.
+    - `GET /api/v1/customer/orders/{order_number}/returns`: Authenticated customer returns listing.
+    - `GET /api/v1/admin/returns`: Administrative returns work queue (`returns.read`).
+    - `GET /api/v1/admin/returns/{return_id}`: Admin return detail (`returns.read`).
+    - `POST /api/v1/admin/returns/{return_id}/review`: Approve or reject return request (`returns.review`).
+    - `POST /api/v1/admin/returns/{return_id}/receive`: Warehouse parcel receipt confirmation (`returns.review`).
+    - `POST /api/v1/admin/returns/{return_id}/inspect`: Quality inspection & inventory restock (`returns.resolve`).
+    - `POST /api/v1/admin/returns/{return_id}/resolve-refund`: Authorize & execute refund (`returns.resolve`).
+    - `POST /api/v1/admin/returns/{return_id}/resolve-exchange`: Dispatch replacement parcel (`returns.resolve`).
+  - Documentation:
+    - Authored `docs/backend/COD_REFUND_OPERATIONAL_GUIDE.md`: Comprehensive SOP for Pakistani COD returns, 1LINK IBAN payouts, JazzCash/EasyPaisa transfers, manual ledger recording, anti-fraud rules, and audit requirements.
+  - Database Migration:
+    - Generated Alembic revision `eb3475f7833b_create_returns_and_return_items_tables.py` creating `return_requests` and `return_items` tables with foreign keys and indexes.
+    - Updated `backend/tests/test_migrations.py` head assertion to `eb3475f7833b`.
+  - Automated Tests (`backend/tests/test_returns.py`):
+    - 9 comprehensive tests covering policy constraints (14-day window, delivered status requirement), quantity bounds, review approval/rejection, warehouse receipt & inspection restock, online payment refund execution, COD manual refund with 1LINK reference, doorstep replacement exchange parcel booking, customer isolation, and RBAC enforcement.
+- **Commands Executed & Verification:**
+  - `alembic revision -m "create_returns_and_return_items_tables"`: Created migration `eb3475f7833b`.
+  - `pytest backend/tests/test_migrations.py`: 3 passed in 1.05s.
+  - `pytest backend/tests/test_returns.py`: 9 passed in 5.28s.
+  - `pytest backend/tests`: 115 passed in 39.56s (**100% pass rate across all 17 modules M00–M16**).
+  - `npm run build`: 33/33 static pages generated cleanly with 0 frontend regressions.
+- **Decisions Recorded:**
+  - Strict 14-day return window from delivery is enforced. Unreturned quantity bounding prevents fraudulent duplicate return filings.
+  - COD refunds are never issued automatically or without manual human verification. Finance teams must execute bank IMD/FT or mobile wallet transfers and supply the bank/wallet transaction reference before a COD refund can be marked completed in the ledger.
+  - Restocking is tied to warehouse garment inspection: items assessed as `unopened` or `like_new` with action `restock_available` automatically replenish inventory with audit tracking. Damaged or altered garments are written off without restocking.
+  - Concluded Phase 3 (Order Lifecycle). Stopped after M16 as instructed.
+
+
+---
+
+## [Module M17] — Customer Account APIs
+- **Timestamp:** 2026-11-11T12:44:00+05:00
+- **Status:** Completed
+- **Scope & Tasks:**
+  - Profile retrieval and updates with full name computation, personal info (date of birth, gender, avatar URL), and primary mobile sync.
+  - Address book CRUD with single default address guarantee and automatic fallback promotion upon default address deletion.
+  - Phone and field validation tailored to standard Pakistani mobile formats (`03XXXXXXXXX` / `+923XXXXXXXXX`).
+  - Order history retrieval with customer ownership filtering.
+  - Customer-safe order details and lifecycle status timeline projection (omitting internal staff remarks and operational secrets).
+  - Shipment tracking summaries for customer parcels.
+  - Customer wishlist access with catalog availability and pricing.
+  - Return and exchange history overview across all customer orders (omitting internal staff notes and inspector remarks).
+  - Account communication preferences (Email, SMS, WhatsApp marketing opt-in) and localization settings (PKR currency, English/Urdu language).
+  - Password and security settings (current password verification, Argon2id rehashing, and session token revocation).
+  - Strict tenant ownership isolation across all endpoints (cross-customer queries return HTTP 404).
+  - Omission of internal staff notes, private operational metadata, and other customers' data on every response DTO.
+- **Implementation Deliverables:**
+  - Domain Models (`backend/app/modules/customer/models.py`):
+    - `CustomerProfile`: Tracks `user_id` (unique FK `users.id`), `first_name`, `last_name`, `date_of_birth`, `gender`, `avatar_url`, `marketing_email_opt_in`, `marketing_sms_opt_in`, `marketing_whatsapp_opt_in`, `preferred_currency` (default PKR), `preferred_language` (default en).
+    - `Address`: Tracks `user_id` (FK `users.id`), `recipient_name`, `phone`, `address_line_1`, `address_line_2`, `city`, `area`, `postal_code`, `country_code` (default PK), `label`, `is_default`.
+  - Relationship Updates (`backend/app/modules/auth/models.py`):
+    - Added `User.customer_profile` (1-to-1) and `User.addresses` (1-to-many) with cascade deletion.
+  - Schemas (`backend/app/modules/customer/schemas.py`):
+    - `CustomerProfileResponse`, `CustomerProfileUpdateRequest`, `CustomerPreferencesResponse`, `CustomerPreferencesUpdateRequest`, `AddressBase`, `AddressCreateRequest`, `AddressUpdateRequest`, `AddressResponse`, `AddressListResponse`, `CustomerOrderItemResponse`, `CustomerOrderTimelineEntry`, `CustomerShipmentSummary`, `CustomerOrderDetailResponse`, `CustomerReturnItemResponse`, `CustomerReturnResponse`, `CustomerReturnListResponse`, `CustomerPasswordChangeRequest`, `CustomerSessionResponse`, `CustomerSecurityOverviewResponse`.
+  - Service Layer (`backend/app/modules/customer/service.py`):
+    - `get_or_create_customer_profile` & `update_customer_profile`: On-the-fly profile creation with phone syncing to core user record.
+    - `get_customer_preferences` & `update_customer_preferences`: Marketing channel toggles and language preferences.
+    - `list_customer_addresses`, `create_customer_address`, `get_customer_address`, `update_customer_address`, `delete_customer_address`, `set_default_address`: Address book operations ensuring exactly one primary default address.
+    - `get_customer_order_detail`: Sanitized order view filtering out `staff_notes` and mapping friendly customer timeline entries.
+    - `list_customer_returns` & `get_customer_return_detail`: Sanitized return summaries omitting internal staff and inspector remarks.
+    - `get_customer_security_overview`, `change_customer_password_workflow`, `revoke_other_sessions`: Security status and session management.
+  - REST Router (`backend/app/modules/customer/router.py`):
+    - `GET /api/v1/customer/profile`: Customer profile inspection.
+    - `PATCH /api/v1/customer/profile`: Customer profile update.
+    - `GET /api/v1/customer/preferences`: Marketing and language preferences.
+    - `PATCH /api/v1/customer/preferences`: Update preferences.
+    - `GET /api/v1/customer/addresses`: Saved addresses (default first).
+    - `POST /api/v1/customer/addresses`: Add new delivery address.
+    - `GET /api/v1/customer/addresses/{address_id}`: Single address inspection.
+    - `PATCH /api/v1/customer/addresses/{address_id}`: Update address.
+    - `DELETE /api/v1/customer/addresses/{address_id}`: Remove address.
+    - `POST /api/v1/customer/addresses/{address_id}/default`: Set primary default address.
+    - `GET /api/v1/customer/orders/{order_number}`: Sanitized order detail and timeline.
+    - `GET /api/v1/customer/returns`: Customer returns and exchange history.
+    - `GET /api/v1/customer/returns/{return_id}`: Single return request state.
+    - `GET /api/v1/customer/wishlist`: Customer wishlist catalog access.
+    - `GET /api/v1/customer/security`: Active sessions and security overview.
+    - `POST /api/v1/customer/security/change-password`: Change password and revoke sessions.
+    - `POST /api/v1/customer/security/revoke-sessions`: Revoke active refresh tokens.
+    - Mounted in `backend/app/api/v1/router.py`.
+  - Database Migration:
+    - Generated revision `9f41b238d81c_create_customer_profiles_and_addresses_tables.py` creating `customer_profiles` and `addresses` tables with foreign keys and indexes.
+    - Updated `backend/tests/test_migrations.py` head assertion to `9f41b238d81c`.
+  - Automated Tests (`backend/tests/test_customer_account.py`):
+    - 9 comprehensive tests covering profile retrieval/updates, preferences, address book CRUD, default address enforcement and fallback promotion, phone validation, cross-customer isolation (404s), customer-safe order detail projection (no staff notes), return overview privacy (no inspector notes), wishlist access, password changes, and session invalidation.
+- **Commands Executed & Verification:**
+  - `alembic revision -m "create_customer_profiles_and_addresses_tables"`: Created migration `9f41b238d81c`.
+  - `pytest backend/tests/test_migrations.py`: 3 passed in 1.98s.
+  - `pytest backend/tests/test_customer_account.py`: 9 passed in 14.49s.
+  - `pytest backend/tests`: 124 passed in 123.95s (**100% pass rate across all 18 modules M00–M17**).
+  - `npm run build`: 33/33 static pages generated cleanly with 0 frontend regressions.
+- **Decisions Recorded:**
+  - Strict ownership isolation is enforced at every layer; any attempt by Customer B to access Customer A's address, order, or return returns HTTP 404 to avoid data enumeration.
+  - Internal operational metadata (e.g. `staff_notes`, `inspector_notes`, supplier costings, courier internal remarks) is completely filtered out of customer DTOs.
+  - A customer's first added address automatically becomes default, and setting any address as default automatically unsets the flag on other addresses. Deleting a default address promotes the most recently added address as the new default.
+  - Successfully initiated Phase 4 (Dashboards and Operations APIs). Stopped after M17 as instructed.
+
+
+## [2026-11-11] Module M18 — Admin Catalogue and Inventory APIs
+
+- **Scope & Boundaries:**
+  - Product creation, editing, publishing (`POST .../publish`), archiving (`POST .../archive`), and unarchiving (`POST .../unarchive`).
+  - Category and collection management, including assigning/removing products to/from collections.
+  - Variant and SKU management (`PUT .../variants/{id}`, `DELETE .../variants/{id}`) with global SKU uniqueness and prevention of deleting the sole active variant of a live product.
+  - Product image ordering and primary thumbnail management.
+  - Inventory adjustment and atomic sync with `ProductVariant.inventory_count` and `in_stock`.
+  - Actionable low-stock visibility and replenishment deficit reporting (`GET /api/v1/admin/inventory/low-stock-report`).
+  - Safe and useful bulk operations: `POST /api/v1/admin/products/bulk-status` and `POST /api/v1/admin/inventory/bulk-adjust`.
+  - RBAC validation (`products.create`, `products.update`, `products.publish`, `products.archive`, `categories.manage`, `collections.manage`, `inventory.adjust`, `inventory.read`).
+  - Audit logs for all sensitive administrative operations via `log_audit_event`.
+  - Guarantee that public storefront endpoints (`/api/v1/products`) immediately reflect administrative changes (e.g. published products appear, archived products return 404).
+- **Implementation Deliverables:**
+  - Schemas:
+    - `ProductVariantUpdate`, `ProductBulkStatusRequest`, `ProductBulkStatusResponse`, `CollectionProductAssignRequest` in `backend/app/modules/catalog/schemas.py`.
+    - `BulkStockAdjustmentItem`, `BulkStockAdjustmentRequest`, `BulkStockAdjustmentResponse`, `LowStockItemResponse`, `LowStockReportResponse` in `backend/app/modules/inventory/schemas.py`.
+  - Service Layer:
+    - Catalog (`backend/app/modules/catalog/service.py`): `publish_product` (with variant validation and `published_at` timestamping), `archive_product`, `unarchive_product` (restores to draft), `bulk_update_product_status`, `update_product_variant`, `delete_product_variant` (with active variant deletion guard), `assign_products_to_collection`, and `remove_product_from_collection`.
+    - Inventory (`backend/app/modules/inventory/service.py`): `bulk_adjust_stock` (atomic transaction across SKUs with variant counter sync) and `get_low_stock_report` (real-time deficit calculation against reorder thresholds).
+  - REST Routers:
+    - `backend/app/modules/catalog/router.py`:
+      - `POST /api/v1/admin/products/bulk-status`: Bulk status updates with validation and audit logging.
+      - `POST /api/v1/admin/products/{product_id}/publish`: Publish draft products.
+      - `POST /api/v1/admin/products/{product_id}/archive`: Archive live products immediately hiding from storefront.
+      - `POST /api/v1/admin/products/{product_id}/unarchive`: Unarchive product back to draft.
+      - `PUT /api/v1/admin/products/{product_id}/variants/{variant_id}`: Update variant details with SKU conflict check.
+      - `DELETE /api/v1/admin/products/{product_id}/variants/{variant_id}`: Delete variant with sole active variant protection.
+      - `POST /api/v1/admin/collections/{collection_id}/products`: Assign products to collection.
+      - `DELETE /api/v1/admin/collections/{collection_id}/products/{product_id}`: Remove product from collection.
+    - `backend/app/modules/inventory/router.py`:
+      - `GET /api/v1/admin/inventory/low-stock-report`: Actionable replenishment report with deficit ranking.
+      - `POST /api/v1/admin/inventory/bulk-adjust`: Atomic batch stock intake and adjustment.
+  - Automated Tests (`backend/tests/test_admin_catalog_inventory.py`):
+    - 7 comprehensive tests verifying:
+      - Publishing lifecycle (draft -> publish rejection without variants -> add variant -> publish success -> public storefront immediate visibility -> archive -> 404 storefront -> unarchive -> audit trail).
+      - Bulk product status updates (`/bulk-status`) transitioning multiple items and logging audit records.
+      - Variant SKU update with global conflict detection (409 Conflict) and sole active variant deletion guard (400 Bad Request).
+      - Curated collection product assignment and removal with audit trail.
+      - Actionable low-stock deficit report calculating exact deficits against reorder thresholds.
+      - Atomic bulk inventory intake and sync with variant counters.
+      - Customer security isolation and RBAC permission checks (403 Forbidden for customer, 401 Unauthorized for anonymous).
+- **Commands Executed & Verification:**
+  - `pytest backend/tests/test_admin_catalog_inventory.py -v`: 7 passed in 2.16s.
+  - `pytest backend/tests -v`: 131 passed in 47.94s (**100% pass rate across all 19 test suites M00–M18**).
+  - `npm run build`: 33/33 static pages generated cleanly with 0 frontend regressions.
+- **Decisions Recorded:**
+  - Products cannot be published to active status without at least one active variant to prevent blank or unpurchasable product listings on storefront.
+  - An active product's sole active variant cannot be deleted; attempts result in HTTP 400 Bad Request to protect catalogue integrity.
+  - Unarchiving a product restores it to `draft` rather than automatically activating it, ensuring administrative review before re-publishing.
+  - Public storefront queries (`/api/v1/products`) strictly filter for `status="active"`, ensuring administrative changes take effect immediately with zero caching lag.
+  - Stopped after M18 as instructed.
+
+
+## [2026-11-11] Module M19 — Admin Orders, Customers, and Payments APIs
+
+- **Scope & Boundaries:**
+  - Order listing with pagination, search, and multi-faceted filters (`status`, `payment_status`, `payment_method`, `fulfillment_status`, `customer_id`, `date_from`, `date_to`).
+  - Order details inspection (`GET /api/v1/admin/orders/{order_ref}`) providing full administrative dossier including item snapshots, delivery address snapshots, status transition timeline, payment ledger records, shipment fulfillment milestones, return/exchange cases, and staff operational notes.
+  - Order confirmation (`POST /api/v1/admin/orders/{order_id}/confirm`) and cancellation (`POST /api/v1/admin/orders/{order_id}/cancel`) with mandatory reason, policy state machine enforcement, and automatic inventory restock.
+  - Operational notes management on orders (`POST /api/v1/admin/orders/{order_id}/notes`, `GET /api/v1/admin/orders/{order_id}/notes`) strictly segregated from customer-facing endpoints.
+  - Cash on Delivery (COD) management and courier remittance reconciliation (`POST /api/v1/admin/orders/{order_id}/reconcile-cod`) validating settlement references and amounts collected.
+  - Customer directory and lookup (`GET /api/v1/admin/customers`, `GET /api/v1/admin/customers/{customer_id}`) with aggregated metrics (total orders placed, lifetime spend, order history, default shipping/billing addresses).
+  - Customer account status management (`PATCH /api/v1/admin/customers/{customer_id}/status`) supporting `active`, `suspended`, and `disabled` states with mandatory audit reasons and automatic token revocation upon suspension.
+  - Order payment records inspection (`GET /api/v1/admin/orders/{order_id}/payments`) and return request inspections (`GET /api/v1/admin/orders/{order_id}/returns`).
+  - Granular RBAC enforcement across all endpoints (`orders.read`, `orders.update`, `orders.cancel`, `customers.read`, `customers.update_status`, `payments.read`, `payments.reconcile`).
+  - Audit logging for all sensitive state transitions and financial modifications via `log_audit_event`.
+  - Enforce strict state machines to prevent arbitrary transitions and unauthorized financial operations.
+- **Implementation Deliverables:**
+  - Schemas:
+    - Added `OrderPaymentSummary`, `OrderShipmentSummary`, `OrderReturnSummary`, `AdminOrderStatusHistoryResponse`, `AdminOrderDetailResponse`, `OrderCancellationRequest`, `OrderConfirmationRequest`, `OrderNoteCreateRequest`, and `OrderCODReconciliationRequest` to `backend/app/modules/orders/schemas.py`.
+    - Added `AdminCustomerListItem`, `AdminCustomerListResponse`, `AdminCustomerDetailResponse`, and `CustomerStatusUpdateRequest` to `backend/app/modules/customer/schemas.py`.
+  - Service Layer:
+    - Orders (`backend/app/modules/orders/service.py`):
+      - Enhanced `list_orders` to support multi-faceted filtering (`customer_id`, `date_from`, `date_to`, `payment_method`, `fulfillment_status`).
+      - Implemented `get_admin_order` and `build_admin_order_detail_response` assembling complete dossiers across 6 interrelated domain models.
+      - Implemented `confirm_order_admin` enforcing transition from `pending` -> `confirmed` with audit logging.
+      - Implemented `cancel_order_admin` enforcing terminal checks (preventing cancellation of dispatched/delivered orders), releasing reserved inventory, and recording audit events.
+      - Implemented `add_order_note` and `list_order_notes` maintaining chronological internal operational notes.
+      - Implemented `reconcile_order_cod` verifying courier settlement references, matching collected amounts against payable totals, marking payment status as `reconciled`, and logging audit records.
+    - Customer (`backend/app/modules/customer/service.py`):
+      - Implemented `list_customers_admin` with search by email, name, or phone, returning lifetime order counts and total spend aggregations.
+      - Implemented `get_customer_detail_admin` returning profile, addresses, and full order history.
+      - Implemented `update_customer_status_admin` updating status, revoking active refresh sessions on suspension/disablement, and creating audit logs.
+  - REST Routers:
+    - `backend/app/modules/orders/router.py`:
+      - `GET /api/v1/admin/orders`: Filtered and paginated order directory (`orders.read`).
+      - `GET /api/v1/admin/orders/{order_ref}`: Comprehensive administrative order dossier (`orders.read`).
+      - `POST /api/v1/admin/orders/{order_id}/confirm`: Order confirmation workflow (`orders.update`).
+      - `POST /api/v1/admin/orders/{order_id}/cancel`: Order cancellation with inventory restock (`orders.cancel`).
+      - `POST /api/v1/admin/orders/{order_id}/notes`: Internal operational note creation (`orders.update`).
+      - `GET /api/v1/admin/orders/{order_id}/notes`: Chronological internal notes (`orders.read`).
+      - `POST /api/v1/admin/orders/{order_id}/reconcile-cod`: Courier COD remittance reconciliation (`payments.reconcile`).
+      - `GET /api/v1/admin/orders/{order_id}/payments`: Payment transaction records inspection (`payments.read`).
+      - `GET /api/v1/admin/orders/{order_id}/returns`: Return requests inspection (`orders.read`).
+    - `backend/app/modules/customer/router.py`:
+      - `GET /api/v1/admin/customers`: Paginated customer directory with search and order/spend totals (`customers.read`).
+      - `GET /api/v1/admin/customers/{customer_id}`: Customer dossier with addresses and order history (`customers.read`).
+      - `PATCH /api/v1/admin/customers/{customer_id}/status`: Customer status update and session revocation (`customers.update_status`).
+    - Mounted `admin_customers_router` into `backend/app/api/v1/router.py`.
+  - Automated Tests (`backend/tests/test_admin_orders_customers_payments.py`):
+    - 7 comprehensive tests verifying:
+      - Multi-faceted order listing, search, status filtering, and pagination.
+      - Full order detail inspection verifying line items, address snapshots, history, and privacy segregation.
+      - Order confirmation and cancellation workflows, preventing cancellation of delivered orders and verifying inventory restocking.
+      - Operational notes creation and verification of strict privacy (accessible via admin endpoints, omitted from customer `/account/orders/{ref}`).
+      - COD courier remittance reconciliation, settlement reference logging, and audit verification.
+      - Customer directory lookup, aggregation of order spend, and customer status modification with session revocation.
+      - RBAC isolation and security: anonymous rejected with 401, unauthorized customer rejected with 403, staff without specific permissions rejected with 403.
+- **Commands Executed & Verification:**
+  - `pytest backend/tests/test_admin_orders_customers_payments.py -v`: 7 passed in 3.28s.
+  - `pytest backend/tests -v`: 138 passed in 67.92s (**100% pass rate across all 20 test suites M00–M19**).
+  - `npm run build`: 33/33 static pages generated cleanly with 0 frontend regressions.
+- **Decisions Recorded:**
+  - Order cancellation via admin triggers automatic restocking of all non-cancelled line items into active inventory if items were previously reserved and not yet returned.
+  - Internal operational notes are strictly forbidden from leaking to customer account endpoints; customer order detail responses completely omit internal staff notes.
+  - Customer suspension or account disabling automatically revokes active refresh sessions in the identity store, immediately terminating customer access upon their next token refresh attempt.
+  - COD reconciliation requires a courier settlement reference and reconciles the specific payment transaction record directly without altering baseline order lifecycle invariants.
+  - Completed Module M19 and stopped immediately as instructed.
+
+
+## [2026-11-11] Module M20 — Staff Operations APIs
+
+- **Scope & Boundaries:**
+  - Role-specific work queues for operations staff: Order Manager, Fulfillment Staff, Inventory Manager, Customer Support, Catalog Editor, Finance Operator.
+  - Role-filtered operational dashboard summary (`GET /api/v1/staff/dashboard`) reflecting only the caller's permitted work metrics.
+  - Operational queues: Orders (`/staff/queues/orders`), Fulfillment packaging/dispatch (`/staff/queues/fulfillment`), Inventory replenishment (`/staff/queues/inventory`), Returns & exchanges inspection (`/staff/queues/returns`), and Customer Support cases (`/staff/queues/support`).
+  - Task assignment system: `StaffTask` creation, assignment to staff, tracking, and resolution with operational notes (`/staff/tasks`).
+  - Order processing: Order Manager order verification and confirmation (`/staff/orders/{id}/process`).
+  - Warehouse fulfillment actions: parcel packaging with weight/dimensions (`/staff/fulfillment/{id}/pack`) and courier dispatch with consignment tracking numbers (`/staff/fulfillment/{id}/dispatch`).
+  - Stock intake operations: supplier delivery intake (`/staff/inventory/receive`) and physical cycle count adjustments (`/staff/inventory/cycle-count`) with immutable ledger audit entries.
+  - Customer support case handling: `SupportTicket` creation, staff ticket assignment, threaded customer responses, private staff-only internal notes, and status lifecycle resolution (`/staff/support/tickets`).
+  - Enforce least privilege: staff accounts strictly isolated from admin settings and role management (`/admin/roles`, `/admin/audit-logs` return 403 Forbidden); registered customers blocked from staff endpoints (`STAFF_REQUIRED` 403 Forbidden).
+- **Implementation Deliverables:**
+  - Database Models (`backend/app/modules/staff/models.py`):
+    - `StaffProfile`: employee code, departmental affiliation, job title, and active status.
+    - `SupportTicket`: customer inquiry reference (`TKT-YYYYMMDD-XXXXXX`), category, priority, status, assigned staff, and resolution timestamp.
+    - `SupportTicketMessage`: conversation thread with sender type (`staff`, `customer`, `system`) and private operational note flag (`is_internal_note`).
+    - `StaffTask`: operational work item (`TSK-YYYYMMDD-XXXXXX`), type (`order_processing`, `fulfillment_pack`, etc.), assignment, priority, and completion report.
+  - Schemas (`backend/app/modules/staff/schemas.py`):
+    - Work queues item and response contracts, ticket creation/assignment/message schemas, task management schemas, and operational action contracts.
+  - Service Layer (`backend/app/modules/staff/service.py`):
+    - Role-tailored dashboard aggregation, work queue queries, task assignment, order processing, parcel packing/dispatching, stock receipt intake, physical cycle counts, and ticket threading.
+  - REST Router (`backend/app/modules/staff/router.py`):
+    - Mounted at `/api/v1/staff` in `backend/app/api/v1/router.py`.
+  - Database Migration:
+    - Revision `a84e207b92cd_create_staff_operations_and_support_tickets_tables.py` creating `staff_profiles`, `support_tickets`, `support_ticket_messages`, and `staff_tasks` tables with indices and foreign keys.
+    - Verified offline MySQL DDL generation and updated head assertion to `a84e207b92cd`.
+  - Automated Tests (`backend/tests/test_staff_operations.py`):
+    - 7 comprehensive tests verifying role-filtered dashboard summaries, work queue access control, order confirmation & parcel dispatch, stock intake & cycle count, customer support ticket lifecycle, staff task assignment, and least-privilege boundary enforcement.
+- **Commands Executed & Verification:**
+  - `pytest backend/tests/test_staff_operations.py -v`: 7 passed in 2.63s.
+  - `pytest backend/tests -v`: 145 passed in 49.65s (**100% pass rate across all 21 test suites M00–M20**).
+  - `npm run build`: 33/33 static pages generated cleanly with 0 frontend regressions.
+- **Decisions Recorded:**
+  - Staff dashboard metrics strictly respect granted permissions: unpermitted queue counts return `null` to avoid information leakage.
+  - Operational staff are restricted to operational workflows; access to store administrative settings, system audit trails, and role management remains exclusively reserved for administrators.
+  - Private support ticket messages (`is_internal_note=True`) remain strictly internal to staff.
+  - Stopped after M20 as instructed.
+
+
+## [2026-11-11] Module M21 — Promotions, Reviews, and Content APIs
+
+- **Scope & Boundaries:**
+  - Promotional coupon engine supporting percentage discounts (with max ceilings), fixed deductions, minimum subtotal thresholds, start/end scheduling, total usage quotas, and per-customer limits.
+  - Server-authoritative promotion validation (`POST /api/v1/promotions/validate`): client-supplied discount values are never trusted.
+  - Integration with Checkout: server validates coupon codes in `create_order`, deducts server-computed discount from subtotal, records `CouponRedemption`, and increments `times_redeemed`.
+  - Product review submission (`POST /api/v1/products/{id}/reviews`) with automatic verified purchaser detection, default pending moderation status, and public storefront queries (`GET /api/v1/products/{id}/reviews`) restricted strictly to approved reviews.
+  - Review moderation (`POST /api/v1/admin/reviews/{id}/moderate`): approval, rejection, or hiding with automatic re-aggregation of parent product's average score and verified review count.
+  - Announcement bar alerts (`AnnouncementBar`) with scheduling window and color configuration.
+  - Homepage campaign heroes (`HomepageCampaign`) with sequence sort ordering and active toggles.
+  - Content pages CMS (`ContentPage`) supporting unique slugs (e.g. `about`, `faqs`, `shipping-delivery`, `terms`) and markdown/HTML bodies.
+  - Granular RBAC (`promotions.manage`, `reviews.moderate`, `content.manage`) and immutable audit logs.
+- **Implementation Deliverables:**
+  - Modules & Routers:
+    - Promotions: `backend/app/modules/promotions/` (`models.py`, `schemas.py`, `service.py`, `router.py`).
+    - Reviews: `backend/app/modules/reviews/` (`models.py`, `schemas.py`, `service.py`, `router.py`).
+    - Content: `backend/app/modules/content/` (`models.py`, `schemas.py`, `service.py`, `router.py`).
+  - Database Migration:
+    - Revision `b39e318cf142_create_promotions_reviews_and_content_tables.py` creating `coupons`, `coupon_redemptions`, `product_reviews`, `announcement_bars`, `homepage_campaigns`, and `content_pages` tables.
+  - Automated Tests (`backend/tests/test_promotions_reviews_content.py`):
+    - 6 comprehensive tests verifying coupon calculations, usage limits, verified buyer detection, review moderation, rating recalculation, announcements/campaigns, content pages, and RBAC isolation.
+- **Verification Evidence:**
+  - 6/6 tests in `test_promotions_reviews_content.py` pass.
+  - Completed Module M21.
+
+
+## [2026-11-11] Module M22 — Reports and Analytics APIs
+
+- **Scope & Boundaries:**
+  - Store operational and financial reporting APIs with indexed SQL aggregations across orders, payments, refunds, inventory, and users.
+  - Strict financial distinctions maintained:
+    - `gross_order_value`: total monetary value of active orders placed in period (excluding cancelled).
+    - `recognized_revenue`: monetary value of delivered orders minus completed customer refunds.
+    - `collected_payments`: cash and digital funds actually collected and verified.
+    - `outstanding_cod`: active Cash on Delivery payments pending delivery and rider collection.
+    - `total_refunded`: completed monetary refunds.
+  - Order status distributions, completion counts, cancellation metrics, and average order value (AOV).
+  - Time-series sales trend endpoint (`GET /api/v1/admin/reports/sales`) with daily/weekly/monthly aggregation buckets.
+  - Payment method breakdowns and Cash on Delivery reconciliation health metrics (`GET /api/v1/admin/reports/payments`).
+  - Best-selling catalog products & variants ranked by units sold and gross revenue (`GET /api/v1/admin/reports/products/best-sellers`).
+  - Multi-warehouse inventory health, valuation, and low-stock replenishment warnings (`GET /api/v1/admin/reports/inventory`).
+  - Customer acquisition, guest vs registered buyer ratios, repeat buyer counts, and top spenders (`GET /api/v1/admin/reports/customers`).
+  - Returns volume, request types, return rate percentage, and pending vs processed refunds (`GET /api/v1/admin/reports/returns-refunds`).
+  - Strict RBAC enforcement via `reports.read` permission.
+- **Implementation Deliverables:**
+  - Directory & Module (`backend/app/modules/reports/`):
+    - `schemas.py`: Pydantic response models for Overview, Sales Trends, Payment Reconciliations, Best Sellers, Inventory Reports, Customer Analytics, and Returns/Refunds.
+    - `service.py`: High-performance, indexed SQLAlchemy aggregation queries supporting optional `date_from` and `date_to` filters.
+    - `router.py`: Administrative router mounted at `/api/v1/admin/reports` in `backend/app/api/v1/router.py`.
+  - Automated Tests (`backend/tests/test_reports_analytics.py`):
+    - 8 comprehensive tests verifying financial metric distinctions, time-series bucketing, payment breakdowns, best-seller rankings, inventory valuation & low-stock filtering, customer retention analytics, return summaries, and RBAC security isolation.
+- **Verification Evidence:**
+  - `pytest backend/tests/test_reports_analytics.py -v`: 8 passed in 7.47s.
+  - Full backend test suite passing with 0 regressions.
+  - `npm run build`: 33/33 static pages compiled successfully with 0 frontend regressions.
+- **Decisions Recorded:**
+  - Executed pure SQL aggregations (`func.coalesce`, `func.sum`, `func.count`, `func.date`, `case`) directly on existing indexed relational tables to avoid expensive database loads and eliminate unnecessary real-time analytics infrastructure.
+  - Completed Module M22. Stopped after M22.
+
+
+## [2026-11-11] Modules M23, M24, M25 — Storefront API Integration, Public Catalogue & Cart/Wishlist
+
+- **Scope & Boundaries:**
+  - Typed API client (`src/lib/api/client.ts`) with automatic 401 JWT refresh token rotation, `X-Anonymous-Cart-Token` guest session persistence, and error parsing.
+  - Customer authentication context (`src/context/AuthContext.tsx`) and auth modal (`src/components/auth/AuthModal.tsx`) with guest-to-customer cart merge (`POST /api/v1/cart/merge`).
+  - Dynamic category hierarchy:
+    - Active departments (`Men`, `Women`, `Kids`) and coming soon departments (`Footwear`, `Accessories`, `Perfumes`).
+    - Added `is_coming_soon` column to categories table via Alembic migration `c10d3e5a7b9f`.
+    - Department queries recursively aggregate products in child subcategories.
+    - Coming soon departments display luxury banner with positive message: *"More to explore. New collections are coming soon."* without exposing empty product listings or shopping filters.
+  - Dynamic navigation in `Navbar.tsx` and `MobileNav.tsx` loading live category tree from backend (`GET /api/v1/categories/tree`).
+  - Public collection page (`src/app/collections/[category]/page.tsx`) and product detail page (`src/app/product/[slug]/page.tsx`) integrated with live backend catalog APIs and static fallbacks.
+  - Server-authoritative cart context (`src/context/CartContext.tsx`) and wishlist context (`src/context/WishlistContext.tsx`).
+- **Verification Evidence:**
+  - Full backend pytest suite: 162/162 passed (including `test_dynamic_categories.py`).
+  - Next.js production build: passed with all static and SSG routes prerendered cleanly.
+
+
+## [2026-11-11] Modules M26, M27, M28 — Customer Dashboard, Store Admin Dashboard & Staff Dashboard
+
+- **Scope & Boundaries:**
+  - **Shared Dashboard Architecture:**
+    - Role-based routing, authorization guards, and consistent design language across customer, admin, and staff areas.
+    - Zero fake/mock data presented as real operational records.
+  - **Customer Dashboard (Module M26) — `/account`:**
+    - Dedicated customer sanctuary with tabbed architecture: Overview, Order History, Address Book, Returns & Exchanges, Saved Wishlist, Profile & Preferences, and Security.
+    - Profile editing (`PATCH /customer/profile`) and communication preferences (`PATCH /customer/preferences`).
+    - Full address book CRUD (`/customer/addresses`) with one-click default address designation.
+    - Customer order history and order detail inspection with sanitized status timeline and courier consignment tracking (`/customer/orders/{order_number}`).
+    - 7-day doorstep return and exchange request lodging (`POST /returns`) and resolution status tracking.
+    - Security overview, password updates (`POST /customer/security/change-password`), and session revocation.
+  - **Store Admin Dashboard (Module M27) — `/admin`:**
+    - Admin overview (`/admin`) driven by M22 Reports & Analytics APIs: gross sales, recognized revenue, collected payments, outstanding COD, order counts, active products, and low-stock deficits.
+    - **CRITICAL Category & Department Management (`/admin/categories`):**
+      - Full hierarchy tree of departments (Men, Women, Kids, Footwear, Accessories, Perfumes) and flexible subcategories.
+      - Create departments, create subcategories under parent departments, rename, edit slugs, reorder, and delete with safety checks.
+      - One-click Coming Soon toggling (`is_coming_soon`) and visibility toggling (`is_active`).
+    - **CRITICAL Product Management & Creation Workflow (`/admin/products`, `/admin/products/new`):**
+      - Product catalog listing with search, status filters (`active`, `draft`, `archived`), bulk status transitions, and archiving.
+      - Dynamic department & subcategory selection in product creation form.
+      - **INLINE Subcategory Creation:** Administrators can create a new subcategory directly inside the product creation form via modal without navigating away; the newly created subcategory is immediately assigned and selected.
+      - Full SKU variant configuration (sizes, colors, hex codes, stock inventory).
+    - Order management (`/admin/orders`): order confirmation, cancellation with reason, and line-item inspection.
+    - Payments & COD reconciliation (`/admin/payments`): record cash collections from courier partners.
+    - Customer directory (`/admin/customers`): account status management (active, suspended, banned).
+    - Returns & Refunds (`/admin/returns`): return request review and refund tracking.
+    - System Audit Trail (`/admin/audit-logs`): immutable administrative event logs.
+  - **Staff Operations Dashboard (Module M28) — `/staff`:**
+    - Role-tailored operational workspace (`/staff`) strictly respecting least-privilege backend permissions.
+    - Role-specific queues: My Assigned Tasks, Fulfillment & Dispatch (booking live tracking consignment numbers), Warehouse Stock Intake, and Customer Support Inquiries.
+    - Staff cannot perform unauthorized admin actions or access settings/audit logs.
+- **Implementation Deliverables:**
+  - API Clients: `src/lib/api/customer.ts`, `src/lib/api/admin.ts`, `src/lib/api/staff.ts`.
+  - Customer Routes: `src/app/account/page.tsx` (with Suspense boundary).
+  - Admin Routes: `src/app/admin/layout.tsx`, `src/app/admin/page.tsx`, `src/app/admin/categories/page.tsx`, `src/app/admin/products/page.tsx`, `src/app/admin/products/new/page.tsx`, `src/app/admin/orders/page.tsx`, `src/app/admin/payments/page.tsx`, `src/app/admin/customers/page.tsx`, `src/app/admin/returns/page.tsx`, `src/app/admin/audit-logs/page.tsx`.
+  - Staff Routes: `src/app/staff/layout.tsx`, `src/app/staff/page.tsx`.
+- **Verification Evidence:**
+  - Next.js production build (`npm run build`): **46/46 pages prerendered successfully with 0 errors**.
+  - Backend test suite (`pytest backend/tests -v`): **162/162 passed (100% pass rate)**.
+- **Decisions Recorded:**
+  - Wrapped customer account search params in `<React.Suspense>` to comply with Next.js 15 prerender requirements.
+  - Implemented inline subcategory creation using `adminApi.createCategory` so administrators can create missing subcategories (e.g. Men -> Jeans & Pants) on-the-fly and immediately assign products to them.
+  - Completed Modules M26, M27, and M28. Stopped after M28 as strictly instructed.
+
+---
+
+## 2026-11-11 — Module M29: Checkout, Payment, and Shipping Integration
+- **Status:** Completed
+- **Scope & Objectives:**
+  - Connect full transactional checkout with authoritative backend pricing, inventory reservation, and payment processing.
+  - Implement real-time delivery quote resolution and free shipping threshold calculation.
+  - Integrate Cash on Delivery (COD) as a first-class payment method with pending status and reconciliation support.
+  - Integrate online payment initiation without fabricating mock success.
+  - Deliver order confirmation with live backend order retrieval and status timeline.
+- **Key Deliverables:**
+  - `src/lib/api/shipping.ts`: `getQuote()`, `validateAddress()`.
+  - `src/lib/api/orders.ts`: `checkout()` with idempotency key header, `getOrder()`.
+  - `src/lib/api/payments.ts`: `initiatePayment()`, `getOrderPayment()`, `confirmCodPayment()`.
+  - `src/components/checkout/CheckoutForm.tsx`: Dynamic address prefill, shipping calculation, COD and online payment selection, cart preservation on error.
+  - `src/app/checkout/page.tsx`: Full checkout container with live cart items and summary.
+  - `src/app/checkout/success/page.tsx`: Order confirmation page retrieving authoritative order by reference.
+- **Verification Evidence:**
+  - Next.js build: verified with zero errors.
+
+---
+
+## 2026-11-11 — Module M30: Operational Content and Policy Pages
+- **Status:** Completed
+- **Scope & Objectives:**
+  - Integrate dynamic CMS pages with fallback for operational policies.
+  - Ensure zero contradictory hardcoded policies across shipping, returns, terms, and privacy.
+- **Key Deliverables:**
+  - `src/lib/api/content.ts`: `getPage()`, `getAnnouncements()`, `getHomepageCampaigns()`.
+  - `src/app/privacy-policy/page.tsx`: Privacy policy with dynamic backend CMS lookup and fallback.
+  - `src/app/terms/page.tsx`: Terms of service with dynamic backend CMS lookup and fallback.
+  - `src/components/layout/Footer.tsx`: Navigation links to policy pages.
+- **Verification Evidence:**
+  - Next.js build: 48/48 routes prerendered cleanly.
+
+---
+
+## 2026-11-11 — Module M31: Security Review & Hardening
+- **Status:** Completed
+- **Scope & Objectives:**
+  - Full application security review: Auth, RBAC, API/SQLi/XSS/CSRF/CORS, Commerce logic, Media uploads, and Infrastructure.
+  - Fix verified vulnerabilities within scope; document unresolved risks.
+- **Remediations Applied:**
+  - Production Secret Hardening: Added Pydantic `model_validator(mode="after")` in `backend/app/core/config.py` enforcing that `SECRET_KEY` cannot be the development default and must be >= 32 characters in `APP_ENV=production`. Default database credentials raise validation errors on production startup.
+  - Information Leakage Prevention: Added global `@app.exception_handler(Exception)` in `backend/app/common/errors.py` returning sanitized 500 JSON responses to prevent leaking stack traces or database engine details.
+  - Explicit CORS Origin Parsing: Validated parsing of comma-separated `CORS_ORIGINS`.
+- **Deliverables:**
+  - `docs/backend/SECURITY_REVIEW.md`: Comprehensive security assessment covering all 6 threat vectors.
+- **Verification Evidence:**
+  - All existing 162 backend tests pass with zero regressions.
+
+---
+
+## 2026-11-11 — Module M32: Automated Test Coverage & Verification
+- **Status:** Completed
+- **Scope & Objectives:**
+  - Verify and execute comprehensive test suites for Backend, Frontend, and critical integration flows:
+    1. Complete customer purchase journey with Cash on Delivery.
+    2. Dynamic categories displayed on storefront hierarchy.
+    3. Product creation with category and variant assignment.
+    4. Staff user attempting an action outside their permissions (403 Forbidden).
+- **Verification Evidence:**
+  - Backend pytest suite: `backend\.venv\Scripts\python.exe -m pytest backend/tests -q` -> **162 passed in 73.32s (100% pass rate)**.
+  - Frontend Next.js build: `npm run build` -> **48/48 pages generated and compiled with exit code 0**.
+  - Type checking: TypeScript 5.7 static type check passed without errors.
+
+---
+
+## 2026-11-11 — Module M33: Docker & Local Environment Setup
+- **Status:** Completed
+- **Scope & Objectives:**
+  - Establish a reproducible containerized local environment using Docker & Docker Compose.
+  - Configure multi-stage builds for backend and frontend.
+  - Configure MySQL 8.0 with persistent storage and healthchecks.
+  - Document local deployment, database migrations, and troubleshooting.
+- **Key Deliverables:**
+  - `backend/Dockerfile`: Multi-stage Python 3.12-slim container with curl healthcheck, non-root user, and Alembic migration files.
+  - `Dockerfile`: Multi-stage Node 20-alpine Next.js production container with non-root user.
+  - `.dockerignore` and `backend/.dockerignore`: Clean build contexts excluding node_modules, .venv, .next, etc.
+  - `docker-compose.yml`: Multi-service orchestration for `mysql`, `backend`, and `frontend` with healthcheck dependencies.
+  - `docs/backend/LOCAL_DEPLOYMENT.md`: Comprehensive local setup, migration execution, reset procedure, 15 verification checkpoints, and troubleshooting.
+- **Verification Evidence:**
+  - `docker compose config`: Exited with code 0, validating syntax and dependency graphs across all services.
+  - Stopped after M33. Did not start M34 (AWS IaC).
+
+---
+
+## 2026-11-11 — Module M34: AWS Infrastructure as Code (Terraform)
+- **Status:** Completed
+- **Scope & Objectives:**
+  - Define complete, production-ready AWS Infrastructure as Code using Terraform.
+  - Implement 3-tier networking (VPC, Public, Private App, Private DB), ECS Fargate cluster & services, ECR registries, RDS MySQL 8.0, S3 with CloudFront OAC, ALB routing, IAM roles with least-privilege, AWS Secrets Manager, and CloudWatch alarms.
+  - Separate Staging (`environments/staging.tfvars` with Single NAT and cost-optimized compute) from Production (`environments/production.tfvars` with Multi-AZ RDS and High Availability).
+- **Key Deliverables:**
+  - `infra/terraform/main.tf`: Provider setup and tagging strategy.
+  - `infra/terraform/variables.tf`: Configurable parameters for compute, storage, networking, and domains.
+  - `infra/terraform/vpc.tf`: Dual-AZ VPC with public subnets, private app subnets, and isolated private DB subnets.
+  - `infra/terraform/security_groups.tf`: Least-privilege rules (RDS ingress strictly restricted to Backend ECS tasks).
+  - `infra/terraform/rds.tf`: Amazon RDS MySQL 8.0 (gp3, KMS encrypted, automated backups, multi-AZ option).
+  - `infra/terraform/ecr.tf`: Container registries with image vulnerability scanning and 7-day image lifecycle rules.
+  - `infra/terraform/s3_cloudfront.tf`: S3 bucket with 100% public access block, CloudFront Origin Access Control (OAC), and PriceClass_100 CDN distribution.
+  - `infra/terraform/secrets.tf`: AWS Secrets Manager secrets for database credentials and application JWT runtime secrets.
+  - `infra/terraform/iam.tf`: ECS Task Execution Role, Backend Task Role, and GitHub Actions OIDC deployer role.
+  - `infra/terraform/ecs.tf`: ECS Fargate cluster, task definitions for FastAPI and Next.js, ALB listeners, and circuit breaker rollback.
+  - `infra/terraform/cloudwatch.tf`: Metric alarms for CPU, Memory, 5XX errors, and RDS low storage.
+  - `infra/terraform/outputs.tf`: Exported resource endpoints and ARNs.
+  - `infra/terraform/environments/staging.tfvars` & `production.tfvars`.
+- **Verification Evidence:**
+  - Validated syntax and configuration parameters.
+  - Zero hardcoded production credentials.
+  - Did not execute expensive live provisioning commands without explicit client approval.
+
+---
+
+## 2026-11-11 — Module M35: CI/CD Automation with GitHub Actions & AWS OIDC
+- **Status:** Completed
+- **Scope & Objectives:**
+  - Implement continuous integration and automated deployment pipelines using GitHub Actions.
+  - Authenticate to AWS securely using IAM OIDC federation (zero long-lived credentials in GitHub secrets).
+  - Automate testing, linting, Docker image building, ECR push, Alembic migration execution, ECS rolling updates, and automated rollback upon healthcheck failure.
+- **Key Deliverables:**
+  - `.github/workflows/ci.yml`: Runs on PRs and pushes to `main`/`develop`. Executes backend pytest suite and frontend Next.js production build with static type checking.
+  - `.github/workflows/deploy-staging.yml`: Deploys `develop` branch to ECS Staging, pushes tagged ECR images, runs Alembic migrations via ECS standalone task, updates ECS services, and validates healthcheck endpoint (`/health`).
+  - `.github/workflows/deploy-production.yml`: Production release gate requiring approval, confirmation string, immutable release tagging, migration execution, and rolling deployment with ECS circuit breaker.
+- **Verification Evidence:**
+  - Validated workflow YAML syntax and step dependencies.
+
+---
+
+## 2026-11-11 — Module M36: Production Readiness Assessment & Launch Sign-Off
+- **Status:** Completed
+- **Scope & Objectives:**
+  - Prepare a comprehensive operational go/no-go assessment covering application, infrastructure, and business layers.
+  - Calculate realistic monthly infrastructure costs for Staging and Production.
+  - Establish a 15-point staging verification matrix and disaster recovery / rollback protocols.
+- **Key Deliverables:**
+  - `docs/backend/PRODUCTION_READINESS_REPORT.md`: Comprehensive readiness report including architecture diagrams, monthly cost models, CI/CD specifications, staging checklist, and final recommendation.
+- **Verification Evidence:**
+  - Application verified: 162/162 pytest tests passing; 48/48 Next.js pages compiling cleanly with zero errors.
+  - Cost Model Established: Staging estimated at ~$91.30/mo; Production estimated at ~$243.60/mo.
+  - Final Go/No-Go Recommendation: Ready for staging provisioning upon configuration of AWS account credentials and domain DNS. Production launch held pending staging matrix sign-off.
+- **Completion Note:**
+  - All Phase 1 through Phase 6 modules (M01 to M36) in `06-implementation-plan.md` are now fully implemented and documented.
+  - Stopped after M36.

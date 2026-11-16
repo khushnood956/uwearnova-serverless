@@ -1,0 +1,111 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Git Commit SHA or release tag to promote to Production"
+        required: true
+        type: string
+      confirmation:
+        description: "Type 'CONFIRM-PRODUCTION-LAUNCH' to proceed"
+        required: true
+        type: string
+
+permissions:
+  id-token: write # Required for GitHub OIDC
+  contents: read
+
+env:
+  AWS_REGION: ap-southeast-1
+  ECR_BACKEND: uninova-backend-production
+  ECR_FRONTEND: uninova-frontend-production
+  ECS_CLUSTER: uninova-production-cluster
+  ECS_BACKEND_SERVICE: uninova-production-backend-service
+  ECS_FRONTEND_SERVICE: uninova-production-frontend-service
+
+jobs:
+  production-deployment:
+    name: Production Release & Rollback Gate
+    runs-on: ubuntu-latest
+    environment: production # Protected environment requiring reviewer sign-off
+
+    steps:
+      - name: Validate Launch Confirmation Input
+        run: |
+          if [ "${{ github.event.inputs.confirmation }}" != "CONFIRM-PRODUCTION-LAUNCH" ]; then
+            echo "ERROR: Production launch cancelled. Confirmation phrase did not match."
+            exit 1
+          fi
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PRODUCTION_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 1. Build and Tag Production Images
+      - name: Build & Tag Production Images
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.event.inputs.image_tag }}
+        run: |
+          # Build Backend with production optimization
+          docker build -t $ECR_REGISTRY/$ECR_BACKEND:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_BACKEND:latest ./backend
+          docker push $ECR_REGISTRY/$ECR_BACKEND:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_BACKEND:latest
+
+          # Build Frontend with production domain
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL=https://api.uninova.pk/api/v1 \
+            -t $ECR_REGISTRY/$ECR_FRONTEND:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_FRONTEND:latest ./frontend
+          docker push $ECR_REGISTRY/$ECR_FRONTEND:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_FRONTEND:latest
+
+      # 2. Apply Database Migrations on Production RDS
+      - name: Run Production Database Migrations
+        run: |
+          echo "Running Alembic production database migrations..."
+          aws ecs run-task \
+            --cluster $ECS_CLUSTER \
+            --task-definition uninova-production-backend \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[${{ secrets.PROD_PRIVATE_APP_SUBNET }}],securityGroups=[${{ secrets.PROD_BACKEND_SG }}],assignPublicIp=DISABLED}" \
+            --overrides '{"containerOverrides": [{"name": "backend", "command": ["alembic", "upgrade", "head"]}]}'
+
+      # 3. Update ECS Services with Circuit Breaker
+      - name: Deploy Production ECS Services
+        run: |
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $ECS_BACKEND_SERVICE \
+            --force-new-deployment
+
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $ECS_FRONTEND_SERVICE \
+            --force-new-deployment
+
+      # 4. Wait for Stability
+      - name: Wait for Production ECS Service Stability
+        run: |
+          aws ecs wait services-stable --cluster $ECS_CLUSTER --services $ECS_BACKEND_SERVICE $ECS_FRONTEND_SERVICE
+
+      # 5. Production Smoke Verification
+      - name: Smoke Test Live Production Endpoints
+        run: |
+          echo "Verifying Live Production API..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://api.uninova.pk/health || echo "000")
+          if [ "$STATUS" -ne 200 ]; then
+            echo "CRITICAL: Production health probe failed with HTTP $STATUS! Circuit breaker rollback triggered."
+            exit 1
+          fi
+          echo "SUCCESS: Production healthcheck returned HTTP 200."

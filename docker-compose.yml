@@ -1,0 +1,81 @@
+# ==============================================================================
+# Docker Compose for UniNova Local Development & Containerized Testing
+# Services: MySQL 8.0, FastAPI Backend, Next.js Frontend
+# ==============================================================================
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: uninova_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_secure_password
+      MYSQL_DATABASE: uninova_db
+      MYSQL_USER: uninova_user
+      MYSQL_PASSWORD: uninova_secure_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "uninova_user", "-puninova_secure_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: uninova_backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      APP_ENV: development
+      DEBUG: "true"
+      SECRET_KEY: 2c4746c36264416e272244e20a251cc8b3fff7d21606f780e12313e602101f05
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: uninova_db
+      MYSQL_USER: uninova_user
+      MYSQL_PASSWORD: uninova_secure_password
+      DATABASE_URL: mysql+pymysql://uninova_user:uninova_secure_password@mysql:3306/uninova_db
+      DATABASE_URL_ASYNC: mysql+aiomysql://uninova_user:uninova_secure_password@mysql:3306/uninova_db
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "alembic upgrade head &&
+             python -m app.modules.catalog.seed_data &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+    container_name: uninova_frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      INTERNAL_API_URL: http://backend:8000/api/v1
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+
+volumes:
+  mysql_data:
+    driver: local
