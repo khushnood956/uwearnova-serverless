@@ -131,7 +131,7 @@ BEGIN
   ASSERT v_staff_orders = 1, 'FAIL: Order Manager cannot view store orders';
 
   -- 4.2 Verify permission helper
-  v_inventory_read_allowed := auth.has_permission('inventory.adjust');
+  v_inventory_read_allowed := public.has_permission('inventory.adjust');
   ASSERT v_inventory_read_allowed = false, 'SECURITY VIOLATION: Order Manager has inventory.adjust permission';
 
   RAISE NOTICE 'SUCCESS: Test Case 4 (Staff Permission Scoping) Passed';

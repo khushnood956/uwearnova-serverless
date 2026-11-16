@@ -10,13 +10,13 @@
 -- ------------------------------------------------------------------------------
 
 -- Helper to retrieve domain user ID from authenticated JWT auth.uid()
-CREATE OR REPLACE FUNCTION auth.current_domain_user_id()
+CREATE OR REPLACE FUNCTION public.current_domain_user_id()
 RETURNS BIGINT AS $$
   SELECT id FROM public.users WHERE auth_user_id = auth.uid() LIMIT 1;
 $$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, auth, pg_temp;
 
 -- Helper to check if caller has a specific operational permission
-CREATE OR REPLACE FUNCTION auth.has_permission(p_code TEXT)
+CREATE OR REPLACE FUNCTION public.has_permission(p_code TEXT)
 RETURNS BOOLEAN AS $$
 DECLARE
   v_user_type TEXT;
@@ -47,7 +47,7 @@ END;
 $$ LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, auth, pg_temp;
 
 -- Helper to check if caller is any staff member
-CREATE OR REPLACE FUNCTION auth.is_staff()
+CREATE OR REPLACE FUNCTION public.is_staff()
 RETURNS BOOLEAN AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.users
@@ -179,77 +179,77 @@ ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- Categories
 CREATE POLICY "Public read active categories" ON public.categories
-  FOR SELECT USING (is_active = true OR auth.is_staff());
+  FOR SELECT USING (is_active = true OR public.is_staff());
 
 CREATE POLICY "Staff manage categories" ON public.categories
-  FOR ALL USING (auth.has_permission('categories.manage'));
+  FOR ALL USING (public.has_permission('categories.manage'));
 
 -- Collections
 CREATE POLICY "Public read active collections" ON public.collections
-  FOR SELECT USING (is_active = true OR auth.is_staff());
+  FOR SELECT USING (is_active = true OR public.is_staff());
 
 CREATE POLICY "Staff manage collections" ON public.collections
-  FOR ALL USING (auth.has_permission('collections.manage'));
+  FOR ALL USING (public.has_permission('collections.manage'));
 
 -- Products
 CREATE POLICY "Public read active products" ON public.products
-  FOR SELECT USING (status = 'active' OR auth.is_staff());
+  FOR SELECT USING (status = 'active' OR public.is_staff());
 
 CREATE POLICY "Staff manage products" ON public.products
-  FOR ALL USING (auth.has_permission('products.update') OR auth.has_permission('products.create'));
+  FOR ALL USING (public.has_permission('products.update') OR public.has_permission('products.create'));
 
 -- Product Variants
 CREATE POLICY "Public read active variants" ON public.product_variants
-  FOR SELECT USING (is_active = true OR auth.is_staff());
+  FOR SELECT USING (is_active = true OR public.is_staff());
 
 CREATE POLICY "Staff manage variants" ON public.product_variants
-  FOR ALL USING (auth.has_permission('products.update'));
+  FOR ALL USING (public.has_permission('products.update'));
 
 -- Product Images
 CREATE POLICY "Public read product images" ON public.product_images
   FOR SELECT USING (true);
 
 CREATE POLICY "Staff manage product images" ON public.product_images
-  FOR ALL USING (auth.has_permission('products.update'));
+  FOR ALL USING (public.has_permission('products.update'));
 
 -- Product Collections
 CREATE POLICY "Public read product collections" ON public.product_collections
   FOR SELECT USING (true);
 
 CREATE POLICY "Staff manage product collections" ON public.product_collections
-  FOR ALL USING (auth.has_permission('collections.manage'));
+  FOR ALL USING (public.has_permission('collections.manage'));
 
 -- Announcement Bars, Campaigns, Content Pages
 CREATE POLICY "Public read active announcement bars" ON public.announcement_bars
-  FOR SELECT USING (is_active = true OR auth.is_staff());
+  FOR SELECT USING (is_active = true OR public.is_staff());
 
 CREATE POLICY "Staff manage announcement bars" ON public.announcement_bars
-  FOR ALL USING (auth.has_permission('content.manage'));
+  FOR ALL USING (public.has_permission('content.manage'));
 
 CREATE POLICY "Public read active campaigns" ON public.homepage_campaigns
-  FOR SELECT USING (is_active = true OR auth.is_staff());
+  FOR SELECT USING (is_active = true OR public.is_staff());
 
 CREATE POLICY "Staff manage campaigns" ON public.homepage_campaigns
-  FOR ALL USING (auth.has_permission('content.manage'));
+  FOR ALL USING (public.has_permission('content.manage'));
 
 CREATE POLICY "Public read published content pages" ON public.content_pages
-  FOR SELECT USING (is_published = true OR auth.is_staff());
+  FOR SELECT USING (is_published = true OR public.is_staff());
 
 CREATE POLICY "Staff manage content pages" ON public.content_pages
-  FOR ALL USING (auth.has_permission('content.manage'));
+  FOR ALL USING (public.has_permission('content.manage'));
 
 -- Shipping Methods & Zones
 CREATE POLICY "Public read shipping zones" ON public.shipping_zones
-  FOR SELECT USING (is_active = true OR auth.is_staff());
+  FOR SELECT USING (is_active = true OR public.is_staff());
 
 CREATE POLICY "Staff manage shipping zones" ON public.shipping_zones
-  FOR ALL USING (auth.has_permission('settings.manage'));
+  FOR ALL USING (public.has_permission('settings.manage'));
 
 CREATE POLICY "Public read shipping methods" ON public.shipping_methods
-  FOR SELECT USING (is_active = true OR auth.is_staff());
+  FOR SELECT USING (is_active = true OR public.is_staff());
 
 CREATE POLICY "Staff manage shipping methods" ON public.shipping_methods
-  FOR ALL USING (auth.has_permission('settings.manage'));
+  FOR ALL USING (public.has_permission('settings.manage'));
 
 -- ------------------------------------------------------------------------------
 -- 5. RLS Policies: Customer Data, Addresses & Profiles
@@ -257,21 +257,21 @@ CREATE POLICY "Staff manage shipping methods" ON public.shipping_methods
 
 -- Users
 CREATE POLICY "Users read own record" ON public.users
-  FOR SELECT USING (auth_user_id = auth.uid() OR auth.is_staff());
+  FOR SELECT USING (auth_user_id = auth.uid() OR public.is_staff());
 
 CREATE POLICY "Users update own record" ON public.users
   FOR UPDATE USING (auth_user_id = auth.uid());
 
 -- Customer Profiles
 CREATE POLICY "Customer read own profile" ON public.customer_profiles
-  FOR SELECT USING (user_id = auth.current_domain_user_id() OR auth.has_permission('customers.read'));
+  FOR SELECT USING (user_id = public.current_domain_user_id() OR public.has_permission('customers.read'));
 
 CREATE POLICY "Customer update own profile" ON public.customer_profiles
-  FOR UPDATE USING (user_id = auth.current_domain_user_id());
+  FOR UPDATE USING (user_id = public.current_domain_user_id());
 
 -- Addresses
 CREATE POLICY "Customer manage own addresses" ON public.addresses
-  FOR ALL USING (user_id = auth.current_domain_user_id() OR auth.has_permission('customers.read'));
+  FOR ALL USING (user_id = public.current_domain_user_id() OR public.has_permission('customers.read'));
 
 -- ------------------------------------------------------------------------------
 -- 6. RLS Policies: Cart & Wishlist
@@ -280,7 +280,7 @@ CREATE POLICY "Customer manage own addresses" ON public.addresses
 -- Carts (authenticated customer owns by user_id; anonymous guest owns by matching token)
 CREATE POLICY "Access own cart" ON public.carts
   FOR ALL USING (
-    (user_id IS NOT NULL AND user_id = auth.current_domain_user_id())
+    (user_id IS NOT NULL AND user_id = public.current_domain_user_id())
     OR (anonymous_token IS NOT NULL)
   );
 
@@ -289,20 +289,20 @@ CREATE POLICY "Access own cart items" ON public.cart_items
     EXISTS (
       SELECT 1 FROM public.carts c
       WHERE c.id = cart_items.cart_id
-        AND ((c.user_id = auth.current_domain_user_id()) OR (c.anonymous_token IS NOT NULL))
+        AND ((c.user_id = public.current_domain_user_id()) OR (c.anonymous_token IS NOT NULL))
     )
   );
 
 -- Wishlist
 CREATE POLICY "Customer manage own wishlist" ON public.wishlists
-  FOR ALL USING (user_id = auth.current_domain_user_id());
+  FOR ALL USING (user_id = public.current_domain_user_id());
 
 CREATE POLICY "Customer manage own wishlist items" ON public.wishlist_items
   FOR ALL USING (
     EXISTS (
       SELECT 1 FROM public.wishlists w
       WHERE w.id = wishlist_items.wishlist_id
-        AND w.user_id = auth.current_domain_user_id()
+        AND w.user_id = public.current_domain_user_id()
     )
   );
 
@@ -313,12 +313,12 @@ CREATE POLICY "Customer manage own wishlist items" ON public.wishlist_items
 -- Orders
 CREATE POLICY "Customer view own orders" ON public.orders
   FOR SELECT USING (
-    user_id = auth.current_domain_user_id()
-    OR auth.has_permission('orders.read')
+    user_id = public.current_domain_user_id()
+    OR public.has_permission('orders.read')
   );
 
 CREATE POLICY "Staff manage orders" ON public.orders
-  FOR ALL USING (auth.has_permission('orders.update'));
+  FOR ALL USING (public.has_permission('orders.update'));
 
 -- Order Items
 CREATE POLICY "Customer view own order items" ON public.order_items
@@ -326,7 +326,7 @@ CREATE POLICY "Customer view own order items" ON public.order_items
     EXISTS (
       SELECT 1 FROM public.orders o
       WHERE o.id = order_items.order_id
-        AND (o.user_id = auth.current_domain_user_id() OR auth.has_permission('orders.read'))
+        AND (o.user_id = public.current_domain_user_id() OR public.has_permission('orders.read'))
     )
   );
 
@@ -336,7 +336,7 @@ CREATE POLICY "View order status history" ON public.order_status_history
     EXISTS (
       SELECT 1 FROM public.orders o
       WHERE o.id = order_status_history.order_id
-        AND (o.user_id = auth.current_domain_user_id() OR auth.has_permission('orders.read'))
+        AND (o.user_id = public.current_domain_user_id() OR public.has_permission('orders.read'))
     )
   );
 
@@ -346,13 +346,13 @@ CREATE POLICY "Public read tracking by tracking number" ON public.shipments
     EXISTS (
       SELECT 1 FROM public.orders o
       WHERE o.id = shipments.order_id
-        AND (o.user_id = auth.current_domain_user_id() OR auth.has_permission('orders.read'))
+        AND (o.user_id = public.current_domain_user_id() OR public.has_permission('orders.read'))
     )
-    OR auth.has_permission('shipments.manage')
+    OR public.has_permission('shipments.manage')
   );
 
 CREATE POLICY "Staff manage shipments" ON public.shipments
-  FOR ALL USING (auth.has_permission('shipments.manage'));
+  FOR ALL USING (public.has_permission('shipments.manage'));
 
 CREATE POLICY "Public read shipment events" ON public.shipment_events
   FOR SELECT USING (true);
@@ -360,22 +360,22 @@ CREATE POLICY "Public read shipment events" ON public.shipment_events
 -- Returns
 CREATE POLICY "Customer view own returns" ON public.return_requests
   FOR SELECT USING (
-    user_id = auth.current_domain_user_id()
-    OR auth.has_permission('returns.read')
+    user_id = public.current_domain_user_id()
+    OR public.has_permission('returns.read')
   );
 
 CREATE POLICY "Customer submit return request" ON public.return_requests
-  FOR INSERT WITH CHECK (user_id = auth.current_domain_user_id());
+  FOR INSERT WITH CHECK (user_id = public.current_domain_user_id());
 
 CREATE POLICY "Staff manage returns" ON public.return_requests
-  FOR ALL USING (auth.has_permission('returns.resolve'));
+  FOR ALL USING (public.has_permission('returns.resolve'));
 
 CREATE POLICY "Access return items" ON public.return_items
   FOR ALL USING (
     EXISTS (
       SELECT 1 FROM public.return_requests r
       WHERE r.id = return_items.return_request_id
-        AND (r.user_id = auth.current_domain_user_id() OR auth.has_permission('returns.read'))
+        AND (r.user_id = public.current_domain_user_id() OR public.has_permission('returns.read'))
     )
   );
 
@@ -384,40 +384,40 @@ CREATE POLICY "Access return items" ON public.return_items
 -- ------------------------------------------------------------------------------
 
 CREATE POLICY "Public read approved reviews" ON public.product_reviews
-  FOR SELECT USING (is_approved = true OR auth.is_staff());
+  FOR SELECT USING (is_approved = true OR public.is_staff());
 
 CREATE POLICY "Customer submit review" ON public.product_reviews
-  FOR INSERT WITH CHECK (user_id = auth.current_domain_user_id());
+  FOR INSERT WITH CHECK (user_id = public.current_domain_user_id());
 
 CREATE POLICY "Customer update own review" ON public.product_reviews
-  FOR UPDATE USING (user_id = auth.current_domain_user_id());
+  FOR UPDATE USING (user_id = public.current_domain_user_id());
 
 CREATE POLICY "Staff moderate reviews" ON public.product_reviews
-  FOR ALL USING (auth.has_permission('reviews.moderate'));
+  FOR ALL USING (public.has_permission('reviews.moderate'));
 
 -- ------------------------------------------------------------------------------
 -- 9. RLS Policies: Inventory & Staff Operations (Staff-Only)
 -- ------------------------------------------------------------------------------
 
 CREATE POLICY "Staff view inventory" ON public.inventory_locations
-  FOR ALL USING (auth.has_permission('inventory.read'));
+  FOR ALL USING (public.has_permission('inventory.read'));
 
 CREATE POLICY "Staff view inventory items" ON public.inventory_items
-  FOR ALL USING (auth.has_permission('inventory.read'));
+  FOR ALL USING (public.has_permission('inventory.read'));
 
 CREATE POLICY "Staff view inventory movements" ON public.inventory_movements
-  FOR ALL USING (auth.has_permission('inventory.read'));
+  FOR ALL USING (public.has_permission('inventory.read'));
 
 CREATE POLICY "Staff manage offline sales" ON public.offline_sales
-  FOR ALL USING (auth.has_permission('dashboard.read') OR auth.is_staff());
+  FOR ALL USING (public.has_permission('dashboard.read') OR public.is_staff());
 
 CREATE POLICY "Staff manage offline sale items" ON public.offline_sale_items
-  FOR ALL USING (auth.has_permission('dashboard.read') OR auth.is_staff());
+  FOR ALL USING (public.has_permission('dashboard.read') OR public.is_staff());
 
 CREATE POLICY "Staff view tickets" ON public.support_tickets
   FOR ALL USING (
-    user_id = auth.current_domain_user_id()
-    OR auth.is_staff()
+    user_id = public.current_domain_user_id()
+    OR public.is_staff()
   );
 
 CREATE POLICY "Staff view ticket messages" ON public.support_ticket_messages
@@ -425,21 +425,21 @@ CREATE POLICY "Staff view ticket messages" ON public.support_ticket_messages
     EXISTS (
       SELECT 1 FROM public.support_tickets st
       WHERE st.id = support_ticket_messages.ticket_id
-        AND (st.user_id = auth.current_domain_user_id() OR auth.is_staff())
+        AND (st.user_id = public.current_domain_user_id() OR public.is_staff())
     )
   );
 
 CREATE POLICY "Staff view audit logs" ON public.audit_logs
-  FOR SELECT USING (auth.has_permission('audit.read'));
+  FOR SELECT USING (public.has_permission('audit.read'));
 
 CREATE POLICY "Admin manage roles and permissions" ON public.roles
-  FOR ALL USING (auth.has_permission('roles.manage'));
+  FOR ALL USING (public.has_permission('roles.manage'));
 
 CREATE POLICY "Staff read permissions" ON public.permissions
-  FOR SELECT USING (auth.is_staff());
+  FOR SELECT USING (public.is_staff());
 
 CREATE POLICY "Admin manage role permissions" ON public.role_permissions
-  FOR ALL USING (auth.has_permission('roles.manage'));
+  FOR ALL USING (public.has_permission('roles.manage'));
 
 CREATE POLICY "Admin manage user roles" ON public.user_roles
-  FOR ALL USING (auth.has_permission('roles.manage'));
+  FOR ALL USING (public.has_permission('roles.manage'));

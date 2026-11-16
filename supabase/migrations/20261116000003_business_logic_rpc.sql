@@ -44,7 +44,7 @@ BEGIN
   END IF;
 
   -- 2. Resolve caller user ID (NULL for guest checkout)
-  v_user_id := auth.current_domain_user_id();
+  v_user_id := public.current_domain_user_id();
 
   -- 3. Generate unique order number (UNV-YYYYMMDD-XXXXXX)
   v_order_number := 'UNV-' || to_char(now(), 'YYYYMMDD') || '-' || upper(substr(md5(random()::text), 1, 6));
@@ -285,7 +285,7 @@ DECLARE
   v_user_cart_id BIGINT;
   v_item RECORD;
 BEGIN
-  v_user_id := auth.current_domain_user_id();
+  v_user_id := public.current_domain_user_id();
   IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'AUTHENTICATION_REQUIRED: Caller must be logged in to merge carts';
   END IF;
