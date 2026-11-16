@@ -24,7 +24,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# Python / FastAPI
+# Python / FastAPI (anchored to prevent ignoring frontend/src/lib)
 __pycache__/
 *.py[cod]
 *$py.class
@@ -34,12 +34,14 @@ env/
 venv/
 .venv/
 ENV/
+backend/env/
+backend/venv/
+backend/lib/
+backend/lib64/
 develop-eggs/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
 parts/
 sdist/
 var/
@@ -47,6 +49,10 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+
+# Explicitly ensure frontend libraries and modules are always tracked
+!frontend/src/lib/
+!frontend/src/lib/**
 
 # Testing, Linting & Coverage
 .pytest_cache/
