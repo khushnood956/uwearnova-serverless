@@ -1,11 +1,6 @@
-name: Deploy Frontend to GitHub Pages
+name: Deploy Frontend to GitHub Pages (Legacy Manual Export)
 
 on:
-  push:
-    branches: [main, master]
-    paths:
-      - 'frontend/**'
-      - '.github/workflows/frontend-gh-pages.yml'
   workflow_dispatch:
 
 permissions:
