@@ -64,9 +64,21 @@ export const shippingApi = {
       .select("*")
       .eq("is_active", true);
 
+    // Read dynamic settings (or fallback to database shipping_methods rate)
+    let dynamicBaseFee = 350;
+    let dynamicFreeThreshold = 5000;
+    try {
+      const { settingsApi } = await import("@/lib/api/settings");
+      const currentSettings = await settingsApi.getSettings();
+      dynamicBaseFee = currentSettings.delivery_fee;
+      dynamicFreeThreshold = currentSettings.free_shipping_threshold;
+    } catch {
+      // fallback
+    }
+
     const quoteMethods: ShippingMethodQuoteItem[] = (methods || []).map((m: any) => {
-      const baseFee = Number(m.base_rate);
-      const freeThreshold = Number(m.free_threshold || 5000.00);
+      const baseFee = Number(m.base_rate || dynamicBaseFee);
+      const freeThreshold = Number(m.free_threshold || dynamicFreeThreshold);
       const isFree = subtotal >= freeThreshold;
       const finalFee = isFree ? 0.00 : baseFee;
 
@@ -87,6 +99,7 @@ export const shippingApi = {
     });
 
     if (quoteMethods.length === 0) {
+      const isFree = subtotal >= dynamicFreeThreshold;
       quoteMethods.push({
         code: "standard",
         name: "Standard Delivery",
@@ -94,12 +107,12 @@ export const shippingApi = {
         estimated_days_min: 2,
         estimated_days_max: 4,
         is_cod_supported: true,
-        base_fee: 350.00,
-        discount: subtotal >= 5000.00 ? 350.00 : 0,
-        final_fee: subtotal >= 5000.00 ? 0.00 : 350.00,
-        is_free: subtotal >= 5000.00,
-        free_shipping_threshold: 5000.00,
-        amount_needed_for_free_shipping: Math.max(0, 5000.00 - subtotal),
+        base_fee: dynamicBaseFee,
+        discount: isFree ? dynamicBaseFee : 0,
+        final_fee: isFree ? 0.00 : dynamicBaseFee,
+        is_free: isFree,
+        free_shipping_threshold: dynamicFreeThreshold,
+        amount_needed_for_free_shipping: Math.max(0, dynamicFreeThreshold - subtotal),
       });
     }
 

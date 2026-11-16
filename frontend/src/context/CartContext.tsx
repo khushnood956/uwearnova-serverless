@@ -39,6 +39,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   // Fetch server cart
   const refreshCart = React.useCallback(async () => {
+    // Skip if on admin/staff portal or user is privileged staff/admin to prevent useless latency
+    if (typeof window !== "undefined") {
+      const p = window.location.pathname;
+      if (p.startsWith("/admin") || p.startsWith("/staff")) return;
+      const role = localStorage.getItem("uwear_user_role");
+      if (role === "admin" || role === "staff") return;
+    }
+
     try {
       setIsLoading(true);
       const cart = await cartApi.getCart();
@@ -52,6 +60,19 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   // On mount: fetch active server cart, or fallback to local storage
   React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const p = window.location.pathname;
+      if (p.startsWith("/admin") || p.startsWith("/staff")) {
+        setIsHydrated(true);
+        return;
+      }
+      const role = localStorage.getItem("uwear_user_role");
+      if (role === "admin" || role === "staff") {
+        setIsHydrated(true);
+        return;
+      }
+    }
+
     try {
       const stored = localStorage.getItem(CART_STORAGE_KEY);
       if (stored) {

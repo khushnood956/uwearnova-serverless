@@ -510,7 +510,13 @@ export const adminApi = {
     const offset = params?.offset || 0;
 
     let query = supabase.from("orders").select("*, items:order_items(*)", { count: "exact" });
-    if (params?.status) query = query.eq("status", params.status);
+    if (params?.status) {
+      if (params.status === "pending" || params.status === "pending_confirmation") {
+        query = query.in("status", ["pending", "pending_confirmation"]);
+      } else {
+        query = query.eq("status", params.status);
+      }
+    }
     if (params?.payment_status) query = query.eq("payment_status", params.payment_status);
 
     query = query.order("placed_at", { ascending: false }).range(offset, offset + limit - 1);
@@ -533,6 +539,39 @@ export const adminApi = {
     const { data, error } = await supabase
       .from("orders")
       .update({ status: "confirmed" })
+      .eq("id", Number(id))
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  async updateOrderStatus(id: number | string, status: string, note?: string): Promise<any> {
+    const updatePayload: any = { status };
+    if (status === "delivered") {
+      updatePayload.payment_status = "paid";
+    }
+    if (note) {
+      updatePayload.internal_notes = note;
+    }
+    const { data, error } = await supabase
+      .from("orders")
+      .update(updatePayload)
+      .eq("id", Number(id))
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  async dispatchOrder(id: number | string, courierCode: string, trackingNumber: string): Promise<any> {
+    const { data, error } = await supabase
+      .from("orders")
+      .update({
+        status: "shipped",
+        courier_code: courierCode,
+        tracking_number: trackingNumber,
+      })
       .eq("id", Number(id))
       .select("*")
       .single();

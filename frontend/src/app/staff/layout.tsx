@@ -67,12 +67,13 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
           <p className="text-xs text-obsidian-600 font-light">
             Your account ({user?.email}) is a standard customer account and is not authorized to access staff work queues.
           </p>
-          <Link
-            href="/"
+          <button
+            type="button"
+            onClick={logout}
             className="inline-block px-5 py-2.5 rounded-button bg-obsidian text-ivory text-xs font-semibold"
           >
-            Return to Storefront
-          </Link>
+            Sign Out & Return to Store
+          </button>
         </div>
       </div>
     );
@@ -83,9 +84,9 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
       {/* Top Operations Bar */}
       <header className="h-16 bg-obsidian text-ivory border-b border-obsidian-800 flex items-center justify-between px-6 shrink-0">
         <div className="flex items-center gap-3">
-          <Link href="/" className="font-serif text-xl font-medium tracking-tight text-ivory">
+          <span className="font-serif text-xl font-medium tracking-tight text-ivory select-none">
             {BRAND_CONFIG.name}
-          </Link>
+          </span>
           <span className="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full bg-champagne-dark text-ivory">
             Staff Operations
           </span>
@@ -95,9 +96,21 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
           <div className="hidden sm:block text-right">
             <p className="text-ivory font-medium truncate max-w-[200px]">{user?.email}</p>
             <p className="text-[10px] text-ivory-light/60 uppercase tracking-wider">
-              {user?.user_type === "admin" ? "Super Administrator" : "Fulfillment & Operations Specialist"}
+              {user?.user_type === "admin" ? "Store Administrator (Full Access)" : "Fulfillment & Operations Specialist"}
             </p>
           </div>
+          <Link
+            href="/admin/pos"
+            className="text-[11px] text-champagne hover:underline font-semibold"
+          >
+            Offline POS Counter
+          </Link>
+          <Link
+            href="/admin/products"
+            className="text-[11px] text-champagne hover:underline font-semibold"
+          >
+            Manage Products
+          </Link>
           {user?.user_type === "admin" && (
             <Link
               href="/admin"
@@ -106,18 +119,13 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
               ★ Admin Console
             </Link>
           )}
-          <Link
-            href="/"
-            className="text-[11px] text-ivory-light/80 hover:text-white"
-          >
-            Storefront
-          </Link>
           <button
             type="button"
             onClick={logout}
-            className="text-[11px] text-crimson hover:underline"
+            className="text-[11px] text-crimson hover:underline font-semibold flex items-center gap-1"
           >
-            Sign Out
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sign Out</span>
           </button>
         </div>
       </header>

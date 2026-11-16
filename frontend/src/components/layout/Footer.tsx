@@ -188,7 +188,7 @@ export function Footer() {
                 </li>
               ))}
               <li>
-                <span className="text-ivory-light/40">Sialkot (Headquarters) • Sialkot</span>
+                <span className="text-ivory-light/40">Headquarters • Sialkot, Punjab, Pakistan</span>
               </li>
             </ul>
           </div>

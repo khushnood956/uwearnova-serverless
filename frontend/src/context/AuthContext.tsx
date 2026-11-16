@@ -12,7 +12,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (credentials: LoginRequest) => Promise<void>;
-  register: (data: RegisterRequest) => Promise<void>;
+  register: (data: RegisterRequest) => Promise<{ requiresVerification?: boolean }>;
   logout: () => Promise<void>;
   isAuthModalOpen: boolean;
   authModalTab: "signin" | "register";
@@ -37,7 +37,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data: { session } } = await supabase.auth.getSession();
         if (session && isMounted) {
           const me = await authApi.getMe();
-          if (isMounted) setUser(me);
+          if (isMounted) {
+            setUser(me);
+            if (me?.user_type) {
+              document.cookie = `uwear_user_role=${me.user_type}; path=/; max-age=2592000; SameSite=Lax`;
+              try {
+                localStorage.setItem("uwear_user_role", me.user_type);
+              } catch {}
+            }
+          }
+        } else {
+          document.cookie = "uwear_user_role=; path=/; max-age=0; SameSite=Lax";
+          try {
+            localStorage.removeItem("uwear_user_role");
+          } catch {}
         }
       } catch {
         if (isMounted) setUser(null);
@@ -55,11 +68,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === "SIGNED_IN" && session) {
         try {
           const me = await authApi.getMe();
-          if (isMounted) setUser(me);
+          if (isMounted) {
+            setUser(me);
+            if (me?.user_type) {
+              document.cookie = `uwear_user_role=${me.user_type}; path=/; max-age=2592000; SameSite=Lax`;
+              try {
+                localStorage.setItem("uwear_user_role", me.user_type);
+              } catch {}
+            }
+          }
         } catch {
           // ignore profile load error
         }
       } else if (event === "SIGNED_OUT") {
+        document.cookie = "uwear_user_role=; path=/; max-age=0; SameSite=Lax";
+        try {
+          localStorage.removeItem("uwear_user_role");
+        } catch {}
         if (isMounted) setUser(null);
       }
     });
@@ -75,6 +100,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const currentUser = await authApi.getMe();
     setUser(currentUser);
 
+    // Synchronize role cookie and local storage immediately
+    if (currentUser?.user_type) {
+      document.cookie = `uwear_user_role=${currentUser.user_type}; path=/; max-age=2592000; SameSite=Lax`;
+      try {
+        localStorage.setItem("uwear_user_role", currentUser.user_type);
+      } catch {}
+    }
+
+    // Role-based portal redirection: Admins and Staff are routed to workstations immediately
+    if (currentUser?.user_type === "admin") {
+      setIsAuthModalOpen(false);
+      window.location.href = "/admin";
+      return;
+    }
+
+    if (currentUser?.user_type === "staff") {
+      setIsAuthModalOpen(false);
+      window.location.href = "/staff";
+      return;
+    }
+
     // Merge anonymous guest cart into customer account if guest cart exists
     const guestCartToken = getAnonymousCartToken();
     if (guestCartToken) {
@@ -89,21 +135,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const register = React.useCallback(
-    async (data: RegisterRequest) => {
+    async (data: RegisterRequest): Promise<{ requiresVerification?: boolean }> => {
       await authApi.register(data);
-      // Auto-login upon registration
-      await login({ email: data.email, password: data.password });
+      // Attempt auto-login upon registration
+      try {
+        await login({ email: data.email, password: data.password });
+        return { requiresVerification: false };
+      } catch (err: any) {
+        // If Supabase confirms email confirmation is required:
+        const msg = (err?.message || "").toLowerCase();
+        if (msg.includes("confirm") || msg.includes("not verified") || msg.includes("verification")) {
+          return { requiresVerification: true };
+        }
+        // If login failed for other reason, assume email verification is required
+        return { requiresVerification: true };
+      }
     },
     [login]
   );
 
   const logout = React.useCallback(async () => {
+    document.cookie = "uwear_user_role=; path=/; max-age=0; SameSite=Lax";
+    try {
+      localStorage.removeItem("uwear_user_role");
+    } catch {}
     try {
       await authApi.logout();
     } catch (e) {
       console.warn("Logout error:", e);
     }
     setUser(null);
+    window.location.href = "/";
   }, []);
 
   const openAuthModal = React.useCallback((tab: "signin" | "register" = "signin") => {

@@ -14,15 +14,26 @@ import {
 
 let cachedUserResponse: UserResponse | null = null;
 let cachedAuthUserId: string | null = null;
+let lastMeFetchTime = 0;
+const ME_CACHE_TTL_MS = 30000; // 30-second cache to prevent redundant round-trips to Tokyo
 
 export const authApi = {
   async register(data: RegisterRequest): Promise<UserResponse> {
     cachedUserResponse = null;
     cachedAuthUserId = null;
+    lastMeFetchTime = 0;
+
+    // Direct redirect URL back to the active application domain (local or Vercel)
+    const emailRedirectTo =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/auth/callback`
+        : undefined;
+
     const { data: authData, error } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
       options: {
+        emailRedirectTo,
         data: {
           first_name: data.first_name || "",
           last_name: data.last_name || "",
@@ -54,9 +65,29 @@ export const authApi = {
     };
   },
 
+  async resendVerificationEmail(email: string): Promise<void> {
+    const emailRedirectTo =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/auth/callback`
+        : undefined;
+
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: {
+        emailRedirectTo,
+      },
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+  },
+
   async login(credentials: LoginRequest): Promise<TokenResponse> {
     cachedUserResponse = null;
     cachedAuthUserId = null;
+    lastMeFetchTime = 0;
     const { data, error } = await supabase.auth.signInWithPassword({
       email: credentials.email,
       password: credentials.password,
@@ -79,15 +110,21 @@ export const authApi = {
   },
 
   async getMe(): Promise<UserResponse> {
+    const now = Date.now();
+    if (cachedUserResponse && cachedAuthUserId && now - lastMeFetchTime < ME_CACHE_TTL_MS) {
+      return cachedUserResponse;
+    }
+
     const { data: { user }, error } = await supabase.auth.getUser();
 
     if (error || !user) {
       cachedUserResponse = null;
       cachedAuthUserId = null;
+      lastMeFetchTime = 0;
       throw new Error(error?.message || "User is not authenticated.");
     }
 
-    if (cachedUserResponse && cachedAuthUserId === user.id) {
+    if (cachedUserResponse && cachedAuthUserId === user.id && now - lastMeFetchTime < ME_CACHE_TTL_MS) {
       return cachedUserResponse;
     }
 
@@ -115,6 +152,7 @@ export const authApi = {
       updated_at: domainUser?.updated_at || user.updated_at || new Date().toISOString(),
     };
     cachedAuthUserId = user.id;
+    lastMeFetchTime = Date.now();
 
     return cachedUserResponse;
   },
@@ -122,6 +160,7 @@ export const authApi = {
   async logout(_refreshToken?: string): Promise<void> {
     cachedUserResponse = null;
     cachedAuthUserId = null;
+    lastMeFetchTime = 0;
     const { error } = await supabase.auth.signOut();
     if (error) {
       console.warn("Supabase signOut error:", error.message);
@@ -129,6 +168,9 @@ export const authApi = {
   },
 
   async changePassword(data: ChangePasswordRequest): Promise<void> {
+    cachedUserResponse = null;
+    cachedAuthUserId = null;
+    lastMeFetchTime = 0;
     const { error } = await supabase.auth.updateUser({
       password: data.new_password,
     });

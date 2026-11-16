@@ -18,7 +18,7 @@ export const BRAND_CONFIG = {
     email: "info@uwearnova.com",
     phone: "+92 319 1772713",
     supportHours: "Mon - Sat: 10:00 AM - 8:00 PM PKT",
-    location: "Sialkot, Pakistan",
+    location: "Sialkot, Punjab, Pakistan",
   },
   socials: {
     instagram: "https://instagram.com",

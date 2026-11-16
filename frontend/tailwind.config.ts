@@ -46,7 +46,7 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ["var(--font-sans)", "Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        sans: ["var(--font-sans)", "Jost", "Inter", "ui-sans-serif", "system-ui", "sans-serif"],
         serif: ["var(--font-serif)", "Cormorant Garamond", "Playfair Display", "ui-serif", "serif"],
       },
       fontSize: {

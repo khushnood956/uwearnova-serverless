@@ -48,14 +48,17 @@ A modern, high-performance, serverless luxury fashion e-commerce platform built 
 
 - **Administrative Console & Staff Ecosystem:**
   - **Store Management (`/admin`):** Executive sales reporting, catalog merchandiser, inline subcategory manager, and order processing.
+  - **Rates & Payment Settings (`/admin/settings`):** Live controls for dynamic delivery fees, payment method toggles (COD, Card, Bank Transfer), promo codes, and bundle deals.
+  - **Staff & Admin Management (`/admin/staff`):** Role hierarchy provisioning where Super Admin (`admin1`) alone can create Super Admins, and Store Admins can create operational staff.
   - **Point-of-Sale (POS) Terminal (`/admin/pos`):** Fast in-store cashier terminal with quick barcodes, instant cart manipulation, and automated receipt generation.
   - **Staff Workspaces (`/staff`):** Role-tailored queues for dispatch packing, warehouse inventory intake, and customer support.
   - **Customer Sanctuary (`/account`):** Live consignment tracking, address book management, order history, and security preferences.
 
-- **Remote Latency & Navigation Optimizations:**
+- **Strict Role-Based Edge Isolation & Performance:**
+  - **Edge Middleware Route Interception:** Admins and staff have zero route to public customer shopping pages; all customer paths are immediately redirected (HTTP 307) to `/admin` or `/staff`.
   - **Next.js Middleware Prefetch Fast-Path:** Instant bypass on `<Link>` prefetch requests (`purpose: prefetch`), eliminating 300ms round-trips to remote databases on link hover.
   - **Anonymous Fast-Path:** Zero network overhead for visitors browsing public storefront pages.
-  - **React `cache()` Request Deduplication:** Single-roundtrip data sharing across metadata generation and page components.
+  - **React `cache()` & In-Memory TTL:** Single-roundtrip data sharing across metadata generation and page components with 30s session TTL caching.
   - **Instant Skeletons (`loading.tsx`):** 0ms perceived route transition latency with champagne-bone shimmering skeletons across all route groups.
 
 ---
@@ -84,7 +87,7 @@ uwearnova-serverless/
 ├── scripts/                      # Migration, verification, and seed automation scripts
 ├── archive/                      # Retired legacy backend manifest
 ├── package.json                  # Root proxy scripts for automated deployment
-└── vercel.json                   # Vercel deployment configuration
+└── .gitignore                    # Root git exclusion configuration
 ```
 
 ---
@@ -132,12 +135,13 @@ NODE_ENV=production
 
 ## 6. Default Administrative & Staff Accounts
 
-The platform comes pre-configured with 6 role-based staff accounts in live Supabase Auth:
+The platform comes pre-configured with 7 role-based staff accounts in live Supabase Auth:
 
 | Role Title | Account Email | Initial Credentials | Primary Workstation |
 | :--- | :--- | :--- | :--- |
-| **Super Admin** | `admin1@uwearnova.com` | `Admin@UwearNova2026!` | `/admin` (Full System Control) |
-| **Store Admin** | `admin2@uwearnova.com` | `Admin@UwearNova2026!` | `/admin` (Catalog, Orders, Analytics) |
+| **Super Admin** | `admin1@uwearnova.com` | `Admin@UwearNova2026!` | `/admin` (Full System Control & Staff Provisioning) |
+| **Store Admin** | `admin2@uwearnova.com` | `Admin@UwearNova2026!` | `/admin` (Catalog, Orders, Analytics, Settings) |
+| **Store Admin** | `admin3@uwearnova.com` | `Admin@UwearNova2026!` | `/admin` (Catalog, Orders, Analytics, Settings) |
 | **POS Cashier** | `sales1@uwearnova.com` | `Staff@UwearNova2026!` | `/admin/pos` & `/staff` (Point-of-Sale) |
 | **Order Fulfillment** | `sales2@uwearnova.com` | `Staff@UwearNova2026!` | `/admin/orders` & `/staff` (Fulfillment) |
 | **Warehouse Manager** | `inventory1@uwearnova.com` | `Staff@UwearNova2026!` | `/admin/products` & `/staff` (Inventory) |

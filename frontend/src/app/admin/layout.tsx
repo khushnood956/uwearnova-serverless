@@ -16,6 +16,7 @@ import {
   LogOut,
   Sparkles,
   Store,
+  Sliders,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { BRAND_CONFIG } from "@/lib/brand";
@@ -26,12 +27,14 @@ interface AdminLayoutProps {
 
 const ADMIN_NAV = [
   { name: "Executive Overview", href: "/admin", icon: LayoutDashboard },
+  { name: "Rates & Payment Settings", href: "/admin/settings", icon: Sliders },
   { name: "Offline Sales (POS)", href: "/admin/pos", icon: Store },
   { name: "Departments & Categories", href: "/admin/categories", icon: FolderTree },
   { name: "Products & Catalogue", href: "/admin/products", icon: ShoppingBag },
   { name: "Order Operations", href: "/admin/orders", icon: Package },
   { name: "Payments & COD", href: "/admin/payments", icon: CreditCard },
   { name: "Customer Accounts", href: "/admin/customers", icon: Users },
+  { name: "Staff & Administrators", href: "/admin/staff", icon: Sparkles },
   { name: "Returns & Exchanges", href: "/admin/returns", icon: RotateCcw },
   { name: "Audit Trail", href: "/admin/audit-logs", icon: ShieldAlert },
 ];
@@ -71,7 +74,8 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     );
   }
 
-  if (user?.user_type !== "admin") {
+  const isAuthorized = user?.user_type === "admin" || user?.user_type === "staff";
+  if (!isAuthorized) {
     return (
       <div className="min-h-screen bg-ivory flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-ivory-light border border-hairline rounded-2xl p-8 shadow-card text-center space-y-4">
@@ -80,23 +84,16 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           </div>
           <h1 className="font-serif text-2xl font-medium text-obsidian">Restricted Access</h1>
           <p className="text-xs text-obsidian-600 font-light">
-            Your account ({user?.email}) has role <strong className="capitalize">{user?.user_type}</strong>. Only system administrators can access this workspace.
+            Your account ({user?.email}) has role <strong className="capitalize">{user?.user_type}</strong>. Only authorized administrative and staff personnel can access this workspace.
           </p>
           <div className="flex gap-2 justify-center pt-2">
-            <Link
-              href="/"
+            <button
+              type="button"
+              onClick={logout}
               className="px-4 py-2 rounded-button bg-obsidian text-ivory text-xs font-semibold"
             >
-              Return to Storefront
-            </Link>
-            {user?.user_type === "staff" && (
-              <Link
-                href="/staff"
-                className="px-4 py-2 rounded-button bg-champagne-dark text-ivory text-xs font-semibold"
-              >
-                Go to Staff Portal
-              </Link>
-            )}
+              Sign Out & Return to Store
+            </button>
           </div>
         </div>
       </div>
@@ -110,13 +107,13 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         <div>
           {/* Logo & Context */}
           <div className="p-6 border-b border-white/10">
-            <Link href="/" className="inline-flex items-center transition-opacity hover:opacity-90 py-1" aria-label="UWEARNOVA Home">
+            <div className="inline-flex items-center py-1 select-none">
               <img
                 src="/logo/transparent/navbar/logo-navbar-white.svg"
                 alt="UWEARNOVA"
                 className="h-8 w-auto object-contain"
               />
-            </Link>
+            </div>
             <div className="flex items-center gap-1.5 mt-2 text-[11px] text-champagne font-medium tracking-wider uppercase">
               <Sparkles className="w-3 h-3" />
               <span>Store Administration</span>
@@ -153,20 +150,14 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             <p className="text-xs font-medium text-ivory truncate">{user?.email}</p>
           </div>
           <div className="flex items-center justify-between pt-1">
-            <Link
-              href="/"
-              className="text-[11px] text-champagne hover:underline inline-flex items-center gap-1"
-            >
-              <ArrowLeft className="w-3 h-3" />
-              <span>Storefront</span>
-            </Link>
+            <span className="text-[11px] text-ivory-light/40">Secure Portal</span>
             <button
               type="button"
               onClick={logout}
-              className="text-[11px] text-crimson hover:underline inline-flex items-center gap-1"
+              className="text-[11px] text-crimson hover:underline inline-flex items-center gap-1 font-semibold"
             >
-              <LogOut className="w-3 h-3" />
-              <span>Logout</span>
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign Out</span>
             </button>
           </div>
         </div>

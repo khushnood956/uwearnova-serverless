@@ -28,6 +28,14 @@ export function WishlistProvider({ children }: { children: React.ReactNode }) {
 
   // Sync with backend if authenticated, or load from localStorage if guest
   React.useEffect(() => {
+    // Skip if on admin/staff portal or user is privileged staff/admin to prevent useless latency
+    if (typeof window !== "undefined") {
+      const p = window.location.pathname;
+      if (p.startsWith("/admin") || p.startsWith("/staff")) return;
+      const role = localStorage.getItem("uwear_user_role");
+      if (role === "admin" || role === "staff") return;
+    }
+
     let mounted = true;
     if (isAuthenticated) {
       setIsLoading(true);

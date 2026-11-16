@@ -527,7 +527,7 @@ async def seed_default_locations(db: AsyncSession) -> None:
         location = InventoryLocation(
             name="Sialkot Central Fulfillment Center",
             code="SKT-FC1",
-            address_line_1="Paris Road, Cantt",
+            address_line_1="Sialkot, Punjab, Pakistan",
             city="Sialkot",
             country_code="PK",
             is_active=True,
@@ -537,7 +537,7 @@ async def seed_default_locations(db: AsyncSession) -> None:
     else:
         location.name = "Sialkot Central Fulfillment Center"
         location.city = "Sialkot"
-        location.address_line_1 = "Paris Road, Cantt"
+        location.address_line_1 = "Sialkot, Punjab, Pakistan"
         location.is_active = True
         await db.flush()
 

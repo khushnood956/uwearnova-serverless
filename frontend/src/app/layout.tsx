@@ -1,14 +1,26 @@
 import type { Metadata, Viewport } from "next";
+import { Cormorant_Garamond, Jost } from "next/font/google";
 import { BRAND_CONFIG } from "@/lib/brand";
-import { Header } from "@/components/layout/Header";
-import { Footer } from "@/components/layout/Footer";
-import { CartDrawer } from "@/components/cart/CartDrawer";
-import { AuthModal } from "@/components/auth/AuthModal";
+import { StorefrontLayoutShell } from "@/components/layout/StorefrontLayoutShell";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import { WishlistProvider } from "@/context/WishlistContext";
-import { SkipToContent } from "@/components/common/SkipToContent";
 import "./globals.css";
+
+const cormorant = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  style: ["normal", "italic"],
+  variable: "--font-serif",
+  display: "swap",
+});
+
+const jost = Jost({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-sans",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: {
@@ -58,19 +70,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${cormorant.variable} ${jost.variable}`}>
       <body className="min-h-screen flex flex-col font-sans antialiased bg-ivory text-obsidian selection:bg-champagne/30 selection:text-obsidian">
         <AuthProvider>
           <CartProvider>
             <WishlistProvider>
-              <SkipToContent />
-              <Header />
-              <div id="main-content" className="flex-1 flex flex-col focus:outline-none">
-                {children}
-              </div>
-              <Footer />
-              <CartDrawer />
-              <AuthModal />
+              <StorefrontLayoutShell>{children}</StorefrontLayoutShell>
             </WishlistProvider>
           </CartProvider>
         </AuthProvider>
