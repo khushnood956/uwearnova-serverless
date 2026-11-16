@@ -126,60 +126,125 @@ if (isConfigured(r2Bucket, 'uninova-media')) {
   console.log(`[INFO] R2 Bucket Name: Default 'uninova-media'.`);
 }
 
-// 5. Test Remote Supabase REST Connectivity (If configured)
+// 5. Test Remote Supabase Connectivity (If configured)
 console.log('\n--- 3. Remote Connectivity Test ---');
 if (
   isConfigured(supabaseUrl, 'https://your-project-ref.supabase.co') &&
   isConfigured(anonKey, 'your-anon-public-key-here')
 ) {
-  console.log('Testing remote connection to Supabase REST API...');
-  const pingUrl = `${supabaseUrl.replace(/\/+$/, '')}/rest/v1/`;
+  console.log('Testing remote connection to Supabase Auth & REST Gateway...');
+  const baseUrl = supabaseUrl.replace(/\/+$/, '');
 
-  try {
-    const req = https.request(
-      pingUrl,
-      {
-        method: 'GET',
-        headers: {
-          apikey: anonKey,
-          Authorization: `Bearer ${anonKey}`,
-        },
-        timeout: 8000,
+  // Step A: Ping Supabase Auth Health
+  const authHealthUrl = `${baseUrl}/auth/v1/health`;
+  const parsedAuth = new URL(authHealthUrl);
+
+  const authReq = https.request(
+    {
+      hostname: parsedAuth.hostname,
+      path: parsedAuth.pathname,
+      method: 'GET',
+      headers: {
+        apikey: anonKey,
       },
-      (res) => {
-        if (res.statusCode === 200) {
-          console.log(`[SUCCESS] Connected to Supabase REST Gateway (HTTP 200 OK).`);
-        } else if (res.statusCode === 401 || res.statusCode === 403) {
-          console.error(`[FAIL] Connected but received HTTP ${res.statusCode}. Check that your Anon Key matches the project.`);
-          errors++;
-        } else {
-          console.log(`[INFO] Gateway responded with HTTP ${res.statusCode}.`);
-        }
-        summarize();
+      timeout: 8000,
+    },
+    (res) => {
+      res.resume(); // drain stream
+      if (res.statusCode === 200) {
+        console.log(`[SUCCESS] Supabase Auth Gateway reached (HTTP 200 OK).`);
+      } else {
+        console.log(`[INFO] Supabase Auth Gateway responded with HTTP ${res.statusCode}.`);
       }
-    );
 
-    req.on('error', (err) => {
-      console.error(`[FAIL] Connection failed: ${err.message}`);
-      errors++;
-      summarize();
-    });
+      // Step B: Query REST Gateway table
+      const restReq = https.request(
+        {
+          hostname: parsedAuth.hostname,
+          path: '/rest/v1/categories?select=id&limit=1',
+          method: 'GET',
+          headers: {
+            apikey: anonKey,
+            Authorization: `Bearer ${anonKey}`,
+          },
+          timeout: 8000,
+        },
+        (restRes) => {
+          let data = '';
+          restRes.on('data', (chunk) => (data += chunk));
+          restRes.on('end', () => {
+            if (restRes.statusCode === 200) {
+              console.log(`[SUCCESS] Supabase REST API & Database connected (HTTP 200 OK - 'categories' table reachable).`);
+            } else if (restRes.statusCode === 401) {
+              console.error(`[FAIL] REST query returned HTTP 401 Unauthorized. Ensure your Anon Key belongs to this project.`);
+              errors++;
+            } else if (restRes.statusCode === 404 || data.includes('PGRST204')) {
+              console.log(`[NOTICE] Supabase REST reachable (HTTP ${restRes.statusCode}). Schema migrations may still need to be run in Supabase SQL editor.`);
+            } else {
+              console.log(`[INFO] REST Gateway returned HTTP ${restRes.statusCode}.`);
+            }
 
-    req.on('timeout', () => {
-      req.destroy();
-      console.error(`[FAIL] Connection timed out after 8 seconds.`);
-      errors++;
-      summarize();
-    });
+            testR2();
+          });
+        }
+      );
 
-    req.end();
-  } catch (err) {
-    console.error(`[FAIL] Ping error: ${err.message}`);
+      restReq.on('error', (err) => {
+        console.error(`[FAIL] REST Gateway connection error: ${err.message}`);
+        errors++;
+        testR2();
+      });
+
+      restReq.end();
+    }
+  );
+
+  authReq.on('error', (err) => {
+    console.error(`[FAIL] Auth Gateway connection error: ${err.message}`);
     errors++;
-    summarize();
-  }
+    testR2();
+  });
+
+  authReq.end();
 } else {
   console.log('[SKIPPED] Remote connectivity ping skipped (waiting for credentials).');
+  testR2();
+}
+
+async function testR2() {
+  console.log('\n--- 4. Cloudflare R2 Connection Test ---');
+  if (
+    isConfigured(r2AccountId, 'your-cloudflare-account-id-here') &&
+    isConfigured(r2AccessKey, 'your-r2-access-key-id-here') &&
+    isConfigured(r2SecretKey, 'your-r2-secret-access-key-here')
+  ) {
+    try {
+      const s3Path = path.resolve(__dirname, '../../frontend/node_modules/@aws-sdk/client-s3');
+      const { S3Client, ListObjectsV2Command } = require(s3Path);
+      const r2 = new S3Client({
+        region: 'auto',
+        endpoint: `https://${r2AccountId}.r2.cloudflarestorage.com`,
+        credentials: {
+          accessKeyId: r2AccessKey,
+          secretAccessKey: r2SecretKey,
+        },
+      });
+
+      const listCmd = new ListObjectsV2Command({
+        Bucket: r2Bucket || 'uwearnova',
+        MaxKeys: 1,
+      });
+
+      await r2.send(listCmd);
+      console.log(`[SUCCESS] Cloudflare R2 Bucket '${r2Bucket}' connected and authenticated successfully!`);
+    } catch (r2Err) {
+      console.error(`[FAIL] Cloudflare R2 connection error: ${r2Err.message}`);
+      errors++;
+    }
+  } else {
+    console.log('[INFO] R2 credentials not fully provided; skipping bucket check.');
+  }
+
   summarize();
 }
 
