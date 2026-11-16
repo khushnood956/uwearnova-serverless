@@ -1,0 +1,36 @@
+# Node / Next.js
+node_modules
+.next
+out
+build
+dist
+*.tsbuildinfo
+
+# Secrets & Environment Files
+.env
+.env.*
+*.env
+
+# Python / Backend
+backend/.venv
+backend/__pycache__
+backend/.pytest_cache
+*.pyc
+*.pyo
+
+# Infrastructure & Docs
+infra
+docs
+
+# Git & IDE
+.git
+.gitignore
+.gemini
+.vscode
+.idea
+
+# Temporary files & logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

@@ -1,0 +1,40 @@
+# ==============================================================================
+# UWearNova Frontend — Git Ignore (.gitignore)
+# ==============================================================================
+
+# Node dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js build and cache
+.next/
+out/
+build/
+dist/
+
+# Environment files & secrets
+.env
+.env*.local
+.env.development
+.env.test
+.env.production
+*.env
+!.env.example
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# OS & Editor artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo

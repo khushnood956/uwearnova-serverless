@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-obsidian: #14120F;
+  --color-ivory: #FAF7F2;
+  --color-ivory-sand: #EFE8DC;
+  --color-ivory-light: #FFFDF9;
+  --color-champagne: #B08D57;
+  --color-champagne-dark: #8C6E3F;
+  --color-champagne-light: #D4B98A;
+  --color-sale: #B5472F;
+
+  --dur-fast: 150ms;
+  --dur-base: 280ms;
+  --dur-slow: 600ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  --section-y: clamp(3.5rem, 7vw, 6.5rem);
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    color: #14120F;
+    background-color: #FAF7F2;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    line-height: 1.65;
+    overflow-x: hidden;
+  }
+
+  /* Universal high-contrast visible focus ring */
+  :focus-visible {
+    outline: 2px solid #8C6E3F !important;
+    outline-offset: 2px !important;
+  }
+}
+
+@layer utilities {
+  .section-spacing {
+    padding-top: var(--section-y);
+    padding-bottom: var(--section-y);
+  }
+
+  .container-site {
+    width: 100%;
+    max-width: 1440px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: clamp(1rem, 4vw, 3rem);
+    padding-right: clamp(1rem, 4vw, 3rem);
+  }
+
+  .border-hairline {
+    border-color: rgba(20, 18, 15, 0.08);
+  }
+}
+
+/* Reduced motion preference respect - zero runtime CPU for animations */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transform: none !important;
+  }
+}

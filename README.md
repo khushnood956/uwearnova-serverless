@@ -1,232 +1,151 @@
-# UniNova — Modern Fashion E-Commerce Platform
+# UWEARNOVA — Luxury Fashion E-Commerce Serverless Platform
 
-A production-engineered, luxury fashion e-commerce platform built with **Next.js 15 (App Router)**, **FastAPI (Modular Monolith)**, **MySQL 8.0**, and **AWS ECS Fargate**.
+[![Next.js 15](https://img.shields.io/badge/Next.js-15.1.0-black?logo=next.js)](https://nextjs.org/)
+[![React 19](https://img.shields.io/badge/React-19-blue?logo=react)](https://react.dev/)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL%2017-3ECF8E?logo=supabase)](https://supabase.com/)
+[![Cloudflare R2](https://img.shields.io/badge/Cloudflare-R2%20Storage-F38020?logo=cloudflare)](https://developers.cloudflare.com/r2/)
+[![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-v3.4-38B2AC?logo=tailwind-css)](https://tailwindcss.com/)
+
+A modern, high-performance, serverless luxury fashion e-commerce platform built for **UWEARNOVA**. Engineered with **Next.js 15 Standalone App Router**, **Supabase (PostgreSQL 17, GoTrue Auth, ACID Stored Procedures, Row Level Security)**, and **Cloudflare R2** (S3-compatible zero-egress media storage).
 
 ---
 
-## Architecture Overview
+## 1. System Architecture
 
 ```text
-                                [ User / Browser ]
-                                        │
-                    ┌───────────────────┴───────────────────┐
-                    │                                       │
-                    ▼ (Port 3000)                           ▼ (Port 8000)
-         [ Next.js Storefront ]                  [ FastAPI REST API ]
-          - App Router (React 19)                 - Modular Monolith
-          - Server & Client Components            - Pydantic v2 & SQLAlchemy 2.0
-          - Tailwind CSS Design System            - Argon2id & PyJWT Auth
-                    │                                       │
-                    │                                       ▼ (Port 3306)
-                    │                             [ MySQL 8.0 Database ]
-                    │                              - InnoDB Foreign Keys
-                    │                              - Decimal PKR Currency
-                    │                                       │
-                    └───────────► [ S3 / CloudFront CDN ] ◄─┘
-                                   - Private Bucket (OAC)
-                                   - Presigned Uploads
+                                [ User / Web Browser ]
+                                          │
+                        ┌─────────────────┴─────────────────┐
+                        │                                   │
+                        ▼                                   ▼
+             [ Storefront & Admin ]               [ Direct Media Upload ]
+             Next.js 15 Standalone App            S3v4 Presigned PUT (0ms server load)
+             Edge SSR / React 19 RSC                       │
+                        │                                   ▼
+                        │ PostgREST / RPC       [ Cloudflare R2 Storage ]
+                        ▼                       - Global Edge CDN
+         [ Supabase PostgreSQL 17 ]             - Zero Egress Bandwidth Fees
+         - GoTrue Authentication                - 11 9's Data Durability
+         - Row-Level Security (RLS)
+         - ACID Transactional Checkout (place_order_atomic)
+         - Automated Real-time Sales Reporting Views
 ```
 
 ---
 
-## Key Features
+## 2. Key Platform Features
 
-- **Storefront & Dynamic Categories:**
-  - Multi-tier department hierarchy (Men, Women, Kids, Footwear, Accessories, Perfumes).
-  - Database-driven categories with "Coming Soon" toggles and active filtering.
-  - Persistent cart, saved wishlist, and search with responsive filters.
+- **Storefront & Curated Collections:**
+  - Multi-tier luxury department navigation (Men, Women, Kids, Footwear, Accessories, Perfumes).
+  - High-performance, latency-optimized catalog browsing with parallelized queries and in-memory taxonomy caching.
+  - Persistent shopping bag, curated wishlist, instant search modal, and responsive filter drawers.
+  - Nationwide delivery calculation and authoritatively verified pricing.
 
-- **Cash on Delivery (COD) & Authoritative Pricing:**
-  - Authoritative server-side price, coupon, and shipping calculation.
-  - First-class COD payment flow: orders initialize as `placed` and `pending`, requiring staff/admin reconciliation upon courier delivery.
-  - Idempotent checkout preventing duplicate charges or orders.
+- **Cash on Delivery (COD) & ACID Transactional Commerce:**
+  - Guaranteed stock reservation via Postgres atomic RPC (`place_order_atomic`) preventing race conditions or overselling.
+  - Reliable COD order state machine: orders transition seamlessly through `placed`, `confirmed`, `dispatched`, `delivered`, and `paid`.
+  - Doorstep 7-day complimentary exchanges and returns workflow.
 
-- **Authenticated Dashboard Ecosystem:**
-  - **Customer Portal (`/account`):** Orders, status timeline, address book, 7-day returns, profile preferences, and security.
-  - **Staff Workspaces (`/staff`):** Role-tailored queues for fulfillment packing/dispatch, warehouse stock intake, and customer support.
-  - **Store Admin (`/admin`):** Catalogue management with **inline subcategory creation**, order status transitions, COD reconciliation, customer account management, and real-time sales reports.
+- **Administrative Console & Staff Ecosystem:**
+  - **Store Management (`/admin`):** Executive sales reporting, catalog merchandiser, inline subcategory manager, and order processing.
+  - **Point-of-Sale (POS) Terminal (`/admin/pos`):** Fast in-store cashier terminal with quick barcodes, instant cart manipulation, and automated receipt generation.
+  - **Staff Workspaces (`/staff`):** Role-tailored queues for dispatch packing, warehouse inventory intake, and customer support.
+  - **Customer Sanctuary (`/account`):** Live consignment tracking, address book management, order history, and security preferences.
 
-- **Security & Integrity:**
-  - OWASP-grade Argon2id password hashing and SHA-256 hashed refresh tokens.
-  - Strict `APP_ENV` validation rejecting missing, empty, or unlisted environments.
-  - Production secret key and database credential hardening.
-  - Global unhandled exception sanitization preventing information leakage.
+- **Remote Latency & Navigation Optimizations:**
+  - **Next.js Middleware Prefetch Fast-Path:** Instant bypass on `<Link>` prefetch requests (`purpose: prefetch`), eliminating 300ms round-trips to remote databases on link hover.
+  - **Anonymous Fast-Path:** Zero network overhead for visitors browsing public storefront pages.
+  - **React `cache()` Request Deduplication:** Single-roundtrip data sharing across metadata generation and page components.
+  - **Instant Skeletons (`loading.tsx`):** 0ms perceived route transition latency with champagne-bone shimmering skeletons across all route groups.
 
 ---
 
-## Repository Structure
+## 3. Repository Structure
 
-```
-uninova/
-├── .github/
-│   └── workflows/
-│       ├── frontend-gh-pages.yml      # Automated GitHub Pages static frontend deployment
-│       ├── ci.yml                     # PR & push validation (pytest + next build)
-│       ├── deploy-staging.yml         # Staging deployment via AWS IAM OIDC
-│       └── deploy-production.yml      # Production release gate with circuit breaker
-├── frontend/                          # Next.js 15 Storefront & Dashboards
+```text
+uwearnova-serverless/
+├── frontend/                     # Next.js 15 App Router Application
 │   ├── src/
-│   │   ├── app/                       # Next.js App Router pages & layouts
-│   │   ├── components/                # Reusable React UI components
-│   │   ├── context/                   # Auth, Cart, Wishlist providers
-│   │   ├── lib/                       # Typed API clients & utility functions
-│   │   └── types/                     # TypeScript interfaces & domain schemas
-│   ├── public/                        # Static assets, branding & .nojekyll
-│   ├── Dockerfile                     # Multi-stage production container
-│   ├── next.config.mjs                # Hybrid static export / server runtime config
-│   ├── tailwind.config.ts             # Tailwind CSS design system
-│   ├── tsconfig.json                  # Strict TypeScript configuration
-│   └── package.json                   # Dependencies and build scripts
-├── backend/                           # FastAPI Modular Monolith REST API
-│   ├── app/
-│   │   ├── api/v1/                    # Versioned REST routers & endpoints
-│   │   ├── common/                    # Error handlers, pagination, envelopes
-│   │   ├── core/                      # Config (Pydantic), security, database
-│   │   └── modules/                   # Domain modules (auth, catalog, orders, etc.)
-│   ├── migrations/                    # Alembic schema migrations
-│   ├── tests/                         # Pytest test suite (181 tests)
-│   ├── alembic.ini                    # Alembic configuration
-│   ├── Dockerfile                     # Multi-stage Python 3.12 container
-│   ├── pyproject.toml                 # Backend dependencies & tools
-│   └── requirements.txt               # Pinned Python requirements
-├── docs/
-│   ├── backend/                       # Architecture, DB design, API contract, plans
-│   └── AUDIT_REPORT.md                # Consolidated system & security audit
-├── infra/
-│   └── terraform/                     # Complete AWS Infrastructure as Code
-│       ├── environments/              # Staging & Production tfvars
-│       ├── ecs.tf                     # Fargate cluster, task definitions & ALB
-│       ├── rds.tf                     # Amazon RDS MySQL 8.0 (KMS encrypted)
-│       ├── s3_cloudfront.tf           # Private S3 media bucket & CloudFront OAC
-│       └── vpc.tf                     # Multi-AZ 3-tier networking
-├── logo/                              # Brand logos, icons, favicons & assets
-├── docker-compose.yml                 # Local multi-container orchestration
-├── .gitignore                         # Comprehensive monorepo ignore rules
-└── .env.example                       # Root environment variable template
-```
-├── .env.example                       # Central environment configuration template
-├── .gitignore                         # Git exclusion rules
-├── docker-compose.yml                 # Local container orchestration
-├── Dockerfile                         # Multi-stage Next.js production container
-├── package.json                       # Frontend dependencies & scripts
-└── tsconfig.json                      # TypeScript configuration
+│   │   ├── app/                  # App Router Pages, Routes, & Loading Skeletons
+│   │   ├── components/           # Luxury UI, Product, Cart, Admin, & Layout Components
+│   │   ├── context/              # AuthContext, CartContext, WishlistContext
+│   │   ├── lib/                  # Supabase clients (client, server, admin), Brand config
+│   │   │   ├── api/              # Direct PostgREST & RPC callers (11 modules)
+│   │   │   ├── storage/          # Cloudflare R2 S3v4 client helper
+│   │   │   └── supabase/         # Server client, Middleware helper, React cache()
+│   │   └── middleware.ts         # High-performance Next.js Edge Middleware
+│   ├── public/                   # Vector logos, favicons, webmanifest
+│   └── package.json              # Next.js dependencies & scripts
+├── supabase/                     # Supabase PostgreSQL Foundation
+│   ├── migrations/               # Version-controlled SQL migrations (Schema, RBAC, RPCs)
+│   ├── seed.sql                  # Canonical seed data & verified inventory
+│   └── tests/                    # RLS security verification suite
+├── docs/                         # Migration documentation (Stages 0 through 10)
+├── scripts/                      # Migration, verification, and seed automation scripts
+├── archive/                      # Retired legacy backend manifest
+├── package.json                  # Root proxy scripts for automated deployment
+└── vercel.json                   # Vercel deployment configuration
 ```
 
 ---
 
-## Quick Start (Docker Compose)
+## 4. Environment Configuration
 
-The easiest way to run the complete stack locally (MySQL 8.0, Backend API, and Next.js Storefront) is using Docker Compose:
+To configure production or staging environments, supply the following environment variables:
 
-### 1. Clone & Configure Environment
 ```bash
-git clone https://github.com/your-org/uninova.git
-cd uninova
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=https://<your-project-id>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
+SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
 
-# Copy environment template
-cp .env.example .env
-```
+# Cloudflare R2 Object Storage
+R2_ACCOUNT_ID=<your-cloudflare-account-id>
+R2_ACCESS_KEY_ID=<your-r2-access-key-id>
+R2_SECRET_ACCESS_KEY=<your-r2-secret-access-key>
+R2_BUCKET_NAME=uwearnova
+NEXT_PUBLIC_R2_PUBLIC_DOMAIN=https://<your-r2-public-domain>
 
-### 2. Start Services
-```bash
-docker compose up --build -d
-```
-
-### 3. Apply Database Migrations
-```bash
-docker compose exec backend alembic upgrade head
-```
-
-### 4. Access Applications
-- **Storefront:** [http://localhost:3000](http://localhost:3000)
-- **Backend API Docs (Swagger):** [http://localhost:8000/api/v1/docs](http://localhost:8000/api/v1/docs)
-- **API Health Check:** [http://localhost:8000/health](http://localhost:8000/health)
-
----
-
-## Manual Local Development
-
-If you prefer running services directly on your host machine:
-
-### Backend Setup (FastAPI)
-```bash
-cd backend
-
-# Create and activate virtual environment
-python -m venv .venv
-source .venv/bin/activate       # On Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run migrations
-alembic upgrade head
-
-# Start API server
-uvicorn app.main:app --reload --port 8000
-```
-
-### Frontend Setup (Next.js)
-```bash
-# In project root
-npm ci
-
-# Start Next.js development server
-npm run dev
+# Storefront Brand Identity
+NEXT_PUBLIC_STORE_NAME=UWEARNOVA
+NEXT_PUBLIC_STORE_EMAIL=info@uwearnova.com
+NODE_ENV=production
 ```
 
 ---
 
-## Running Tests
+## 5. Deployment Instructions
 
-### Backend Test Suite (Pytest)
-```bash
-cd backend
-python -m pytest tests -v
-```
-*Current test suite status: **181 tests passing (100% pass rate)** covering auth, dynamic catalog, COD checkout, staff RBAC, and configuration security.*
+### Deploy to Vercel (1-Click Ready)
+1. Import this repository into Vercel.
+2. If prompted, set **Root Directory** to `frontend` (or leave default root with `vercel.json`).
+3. Add the environment variables listed above.
+4. Deploy! Next.js Standalone build will compile automatically.
 
-### Frontend Typecheck & Build
-```bash
-# Check static TypeScript types
-npx tsc --noEmit
-
-# Verify production Next.js build
-npm run build
-```
-*All 48 routes compile and prerender cleanly.*
+### Deploy to Cloudflare Pages
+1. Create a new Cloudflare Pages project connected to this repository.
+2. Build command: `npm --prefix frontend run build` (or `npx @cloudflare/next-on-pages`).
+3. Output directory: `frontend/.next` (or `.vercel/output/static`).
+4. Configure environment variables in project settings.
 
 ---
 
-## Environment Variables (`.env`)
+## 6. Default Administrative & Staff Accounts
 
-UniNova uses explicit, strictly validated environment variables. A template is provided in [`.env.example`](./.env.example).
+The platform comes pre-configured with 6 role-based staff accounts in live Supabase Auth:
 
-| Variable | Description | Default / Example |
-|---|---|---|
-| `APP_ENV` | Application environment (`development`, `test`, `staging`, `production`) | `development` |
-| `SECRET_KEY` | 32+ character cryptographic signing key | Dev default (custom required in prod) |
-| `DATABASE_URL` | Sync database connection string | `mysql+pymysql://...` |
-| `DATABASE_URL_ASYNC` | Async database connection string | `mysql+aiomysql://...` |
-| `CORS_ORIGINS` | Allowed frontend origins | `http://localhost:3000,http://127.0.0.1:3000` |
-| `NEXT_PUBLIC_API_URL` | Public API endpoint for frontend | `http://localhost:8000/api/v1` |
-| `ONLINE_PAYMENT_PROVIDER` | Payment adapter (`none`, `mock`, `safepay`, `payfast`) | `none` (COD default) |
-
-> [!CAUTION]
-> Never commit `.env` or sensitive credentials to GitHub. Only `.env.example` should be tracked in version control.
+| Role Title | Account Email | Initial Credentials | Primary Workstation |
+| :--- | :--- | :--- | :--- |
+| **Super Admin** | `admin1@uwearnova.com` | `Admin@UwearNova2026!` | `/admin` (Full System Control) |
+| **Store Admin** | `admin2@uwearnova.com` | `Admin@UwearNova2026!` | `/admin` (Catalog, Orders, Analytics) |
+| **POS Cashier** | `sales1@uwearnova.com` | `Staff@UwearNova2026!` | `/admin/pos` & `/staff` (Point-of-Sale) |
+| **Order Fulfillment** | `sales2@uwearnova.com` | `Staff@UwearNova2026!` | `/admin/orders` & `/staff` (Fulfillment) |
+| **Warehouse Manager** | `inventory1@uwearnova.com` | `Staff@UwearNova2026!` | `/admin/products` & `/staff` (Inventory) |
+| **Merchandiser** | `inventory2@uwearnova.com` | `Staff@UwearNova2026!` | `/admin/products/new` (Catalog) |
 
 ---
 
-## Deployment & Cloud Infrastructure
+## 7. License & Credits
 
-Complete Infrastructure as Code (Terraform) is located in [`infra/terraform/`](./infra/terraform/):
-- **Staging (`environments/staging.tfvars`):** Cost-optimized with single NAT gateway, `db.t4g.micro` RDS, and 0.25 vCPU Fargate tasks (~$91/month).
-- **Production (`environments/production.tfvars`):** Multi-AZ RDS MySQL, dual-AZ NAT gateways, and redundant Fargate tasks with circuit breaker rollback (~$244/month).
-
-Refer to [`docs/backend/PRODUCTION_READINESS_REPORT.md`](./docs/backend/PRODUCTION_READINESS_REPORT.md) and [`docs/backend/LOCAL_DEPLOYMENT.md`](./docs/backend/LOCAL_DEPLOYMENT.md) for full operational guides.
-
----
-
-## License
-
-Private and proprietary. All rights reserved.
+Copyright © 2026 UWEARNOVA. All rights reserved.
+Developed for luxury fashion commerce with zero-serverful, modern web standards.
