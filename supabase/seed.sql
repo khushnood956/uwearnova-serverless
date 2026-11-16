@@ -101,21 +101,41 @@ INSERT INTO public.categories (name, slug, description, image_url, sort_order, i
   ('Perfumes', 'perfumes', 'Niche extrait de parfum, botanical accords, and subtle luxury fragrances.', 'https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?q=80&w=1000&auto=format&fit=crop', 6, true, true)
 ON CONFLICT (slug) DO NOTHING;
 
--- Subcategories under Men & Women
+-- Subcategories under Men, Women & Kids
 INSERT INTO public.categories (name, slug, parent_id, sort_order, is_active)
-SELECT 'Shirts & Tops', 'men-shirts', id, 1, true FROM public.categories WHERE slug = 'men'
+SELECT 'Men''s Hoodies', 'men-hoodies', id, 1, true FROM public.categories WHERE slug = 'men'
 ON CONFLICT (slug) DO NOTHING;
 
 INSERT INTO public.categories (name, slug, parent_id, sort_order, is_active)
-SELECT 'Trousers & Chinos', 'men-trousers', id, 2, true FROM public.categories WHERE slug = 'men'
+SELECT 'Men''s Jackets', 'men-jackets', id, 2, true FROM public.categories WHERE slug = 'men'
 ON CONFLICT (slug) DO NOTHING;
 
 INSERT INTO public.categories (name, slug, parent_id, sort_order, is_active)
-SELECT 'Dresses & Jumpsuits', 'women-dresses', id, 1, true FROM public.categories WHERE slug = 'women'
+SELECT 'Men''s T-Shirts', 'men-t-shirts', id, 3, true FROM public.categories WHERE slug = 'men'
 ON CONFLICT (slug) DO NOTHING;
 
 INSERT INTO public.categories (name, slug, parent_id, sort_order, is_active)
-SELECT 'Tailored Separates', 'women-separates', id, 2, true FROM public.categories WHERE slug = 'women'
+SELECT 'Men''s Sweaters', 'men-sweaters', id, 4, true FROM public.categories WHERE slug = 'men'
+ON CONFLICT (slug) DO NOTHING;
+
+INSERT INTO public.categories (name, slug, parent_id, sort_order, is_active)
+SELECT 'Men''s Jeans & Pants', 'men-jeans-pants', id, 5, true FROM public.categories WHERE slug = 'men'
+ON CONFLICT (slug) DO NOTHING;
+
+INSERT INTO public.categories (name, slug, parent_id, sort_order, is_active)
+SELECT 'Women''s Hoodies', 'women-hoodies', id, 1, true FROM public.categories WHERE slug = 'women'
+ON CONFLICT (slug) DO NOTHING;
+
+INSERT INTO public.categories (name, slug, parent_id, sort_order, is_active)
+SELECT 'Women''s Jackets', 'women-jackets', id, 2, true FROM public.categories WHERE slug = 'women'
+ON CONFLICT (slug) DO NOTHING;
+
+INSERT INTO public.categories (name, slug, parent_id, sort_order, is_active)
+SELECT 'Women''s T-Shirts', 'women-t-shirts', id, 3, true FROM public.categories WHERE slug = 'women'
+ON CONFLICT (slug) DO NOTHING;
+
+INSERT INTO public.categories (name, slug, parent_id, sort_order, is_active)
+SELECT 'Women''s Sweaters', 'women-sweaters', id, 4, true FROM public.categories WHERE slug = 'women'
 ON CONFLICT (slug) DO NOTHING;
 
 -- 6. Curated Collections
@@ -131,7 +151,7 @@ INSERT INTO public.products (
   price, original_price, is_featured, is_trending, is_new_arrival, rating, review_count
 ) VALUES
   (
-    (SELECT id FROM public.categories WHERE slug = 'men-shirts' LIMIT 1),
+    (SELECT id FROM public.categories WHERE slug = 'men-jackets' LIMIT 1),
     'Relaxed Linen Overshirt',
     'relaxed-linen-overshirt',
     'Pure washed French linen in sand stone',
@@ -147,7 +167,7 @@ INSERT INTO public.products (
     14
   ),
   (
-    (SELECT id FROM public.categories WHERE slug = 'men-trousers' LIMIT 1),
+    (SELECT id FROM public.categories WHERE slug = 'men-jeans-pants' LIMIT 1),
     'Pleated Relaxed Trouser',
     'pleated-relaxed-trouser',
     'Italian cotton-twill with double forward pleats',
@@ -163,7 +183,7 @@ INSERT INTO public.products (
     9
   ),
   (
-    (SELECT id FROM public.categories WHERE slug = 'women-dresses' LIMIT 1),
+    (SELECT id FROM public.categories WHERE slug = 'women' LIMIT 1),
     'Sculptural Drape Midi Dress',
     'sculptural-drape-midi-dress',
     'Heavyweight mulberry silk in ivory',

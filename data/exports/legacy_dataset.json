@@ -1,0 +1,538 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "extracted_at": "2026-11-16T11:33:00Z",
+    "source": "UniNova Serverful Pre-Migration Baseline"
+  },
+  "permissions": [
+    {
+      "code": "dashboard.read",
+      "display_name": "View Dashboard",
+      "category": "dashboard"
+    },
+    {
+      "code": "products.read",
+      "display_name": "View Products",
+      "category": "catalog"
+    },
+    {
+      "code": "products.create",
+      "display_name": "Create Products",
+      "category": "catalog"
+    },
+    {
+      "code": "products.update",
+      "display_name": "Update Products",
+      "category": "catalog"
+    },
+    {
+      "code": "products.archive",
+      "display_name": "Archive Products",
+      "category": "catalog"
+    },
+    {
+      "code": "products.publish",
+      "display_name": "Publish Products",
+      "category": "catalog"
+    },
+    {
+      "code": "categories.manage",
+      "display_name": "Manage Categories",
+      "category": "catalog"
+    },
+    {
+      "code": "collections.manage",
+      "display_name": "Manage Collections",
+      "category": "catalog"
+    },
+    {
+      "code": "inventory.read",
+      "display_name": "View Inventory",
+      "category": "inventory"
+    },
+    {
+      "code": "inventory.adjust",
+      "display_name": "Adjust Inventory",
+      "category": "inventory"
+    },
+    {
+      "code": "orders.read",
+      "display_name": "View Orders",
+      "category": "orders"
+    },
+    {
+      "code": "orders.update",
+      "display_name": "Update Orders",
+      "category": "orders"
+    },
+    {
+      "code": "orders.cancel",
+      "display_name": "Cancel Orders",
+      "category": "orders"
+    },
+    {
+      "code": "shipments.manage",
+      "display_name": "Manage Shipments",
+      "category": "fulfillment"
+    },
+    {
+      "code": "customers.read",
+      "display_name": "View Customers",
+      "category": "customers"
+    },
+    {
+      "code": "customers.update_status",
+      "display_name": "Update Customer Status",
+      "category": "customers"
+    },
+    {
+      "code": "returns.read",
+      "display_name": "View Returns",
+      "category": "returns"
+    },
+    {
+      "code": "returns.review",
+      "display_name": "Review Returns",
+      "category": "returns"
+    },
+    {
+      "code": "returns.resolve",
+      "display_name": "Resolve Returns",
+      "category": "returns"
+    },
+    {
+      "code": "payments.read",
+      "display_name": "View Payments",
+      "category": "payments"
+    },
+    {
+      "code": "payments.reconcile",
+      "display_name": "Reconcile Payments",
+      "category": "payments"
+    },
+    {
+      "code": "refunds.create",
+      "display_name": "Create Refunds",
+      "category": "payments"
+    },
+    {
+      "code": "promotions.manage",
+      "display_name": "Manage Promotions",
+      "category": "marketing"
+    },
+    {
+      "code": "reviews.moderate",
+      "display_name": "Moderate Reviews",
+      "category": "marketing"
+    },
+    {
+      "code": "content.manage",
+      "display_name": "Manage Content",
+      "category": "marketing"
+    },
+    {
+      "code": "staff.read",
+      "display_name": "View Staff Directory",
+      "category": "staff"
+    },
+    {
+      "code": "staff.manage",
+      "display_name": "Manage Staff Accounts",
+      "category": "staff"
+    },
+    {
+      "code": "roles.read",
+      "display_name": "View Roles",
+      "category": "rbac"
+    },
+    {
+      "code": "roles.manage",
+      "display_name": "Manage Roles",
+      "category": "rbac"
+    },
+    {
+      "code": "reports.read",
+      "display_name": "View Reports",
+      "category": "reports"
+    },
+    {
+      "code": "reports.export",
+      "display_name": "Export Reports",
+      "category": "reports"
+    },
+    {
+      "code": "settings.manage",
+      "display_name": "Manage Settings",
+      "category": "system"
+    },
+    {
+      "code": "audit.read",
+      "display_name": "View Audit Trail",
+      "category": "system"
+    }
+  ],
+  "roles": [
+    {
+      "name": "store_admin",
+      "display_name": "Store Administrator",
+      "is_system": true
+    },
+    {
+      "name": "catalog_manager",
+      "display_name": "Catalog Manager",
+      "is_system": true
+    },
+    {
+      "name": "order_manager",
+      "display_name": "Order Operations Manager",
+      "is_system": true
+    },
+    {
+      "name": "fulfillment_staff",
+      "display_name": "Fulfillment & Dispatch Specialist",
+      "is_system": true
+    },
+    {
+      "name": "inventory_manager",
+      "display_name": "Inventory Controller",
+      "is_system": true
+    },
+    {
+      "name": "support_staff",
+      "display_name": "Customer Support Representative",
+      "is_system": true
+    },
+    {
+      "name": "customer",
+      "display_name": "Storefront Customer",
+      "is_system": true
+    }
+  ],
+  "inventory_locations": [
+    {
+      "name": "Primary Fulfillment Center",
+      "code": "WH-KHI-01",
+      "address_line_1": "Korangi Industrial Area",
+      "city": "Karachi",
+      "postal_code": "74900",
+      "country_code": "PK",
+      "is_active": true
+    }
+  ],
+  "shipping_methods": [
+    {
+      "name": "Standard Delivery",
+      "code": "standard",
+      "base_rate": 350.0,
+      "free_threshold": 5000.0,
+      "estimated_days": "2-4 business days",
+      "is_active": true
+    },
+    {
+      "name": "Express Courier Delivery",
+      "code": "express",
+      "base_rate": 650.0,
+      "free_threshold": 10000.0,
+      "estimated_days": "1-2 business days",
+      "is_active": true
+    }
+  ],
+  "categories": [
+    {
+      "name": "Men",
+      "slug": "men",
+      "description": "Structured blazers, refined linen shirts, tailored trousers, and elevated knitwear.",
+      "image_url": "https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?q=80&w=1000&auto=format&fit=crop",
+      "sort_order": 1,
+      "is_coming_soon": false,
+      "parent_slug": null
+    },
+    {
+      "name": "Women",
+      "slug": "women",
+      "description": "Fluid silhouettes, tailored separates, sculptural dresses, and fine cashmere knits.",
+      "image_url": "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1000&auto=format&fit=crop",
+      "sort_order": 2,
+      "is_coming_soon": false,
+      "parent_slug": null
+    },
+    {
+      "name": "Kids",
+      "slug": "kids",
+      "description": "Comfortable, premium cotton staples and warm fleece knitwear for children.",
+      "image_url": "https://images.unsplash.com/photo-1503944583220-79d8926ad5e2?q=80&w=1000&auto=format&fit=crop",
+      "sort_order": 3,
+      "is_coming_soon": false,
+      "parent_slug": null
+    },
+    {
+      "name": "Footwear",
+      "slug": "footwear",
+      "description": "Handcrafted calfskin loafers, minimalist derbies, and modern court sneakers. More to explore. New collections are coming soon.",
+      "image_url": "https://images.unsplash.com/photo-1549298916-b41d501d3772?q=80&w=1000&auto=format&fit=crop",
+      "sort_order": 4,
+      "is_coming_soon": true,
+      "parent_slug": null
+    },
+    {
+      "name": "Accessories",
+      "slug": "accessories",
+      "description": "Architectural leather totes, minimal belts, and signature silk scarves. More to explore. New collections are coming soon.",
+      "image_url": "https://images.unsplash.com/photo-1523293182086-7651a899d37f?q=80&w=1000&auto=format&fit=crop",
+      "sort_order": 5,
+      "is_coming_soon": true,
+      "parent_slug": null
+    },
+    {
+      "name": "Perfumes",
+      "slug": "perfumes",
+      "description": "Niche extrait de parfum, botanical accords, and subtle luxury fragrances. More to explore. New collections are coming soon.",
+      "image_url": "https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?q=80&w=1000&auto=format&fit=crop",
+      "sort_order": 6,
+      "is_coming_soon": true,
+      "parent_slug": null
+    },
+    {
+      "name": "Men's Hoodies",
+      "slug": "men-hoodies",
+      "description": "Heavyweight cotton-fleece hoodies and casual pullovers.",
+      "sort_order": 1,
+      "is_coming_soon": false,
+      "parent_slug": "men"
+    },
+    {
+      "name": "Men's Jackets",
+      "slug": "men-jackets",
+      "description": "Structured wool blazers, overshirts, and architectural trench coats.",
+      "sort_order": 2,
+      "is_coming_soon": false,
+      "parent_slug": "men"
+    },
+    {
+      "name": "Men's T-Shirts",
+      "slug": "men-t-shirts",
+      "description": "Fine-combed pima cotton crewnecks and mandarin collar shirting.",
+      "sort_order": 3,
+      "is_coming_soon": false,
+      "parent_slug": "men"
+    },
+    {
+      "name": "Men's Sweaters",
+      "slug": "men-sweaters",
+      "description": "Extra-fine merino wool and Mongolian cashmere knitwear.",
+      "sort_order": 4,
+      "is_coming_soon": false,
+      "parent_slug": "men"
+    },
+    {
+      "name": "Men's Jeans & Pants",
+      "slug": "men-jeans-pants",
+      "description": "Double-pleat tailored trousers and Japanese raw denim.",
+      "sort_order": 5,
+      "is_coming_soon": false,
+      "parent_slug": "men"
+    },
+    {
+      "name": "Women's Hoodies",
+      "slug": "women-hoodies",
+      "description": "Relaxed-fit cropped hoodies and soft modal pullovers.",
+      "sort_order": 1,
+      "is_coming_soon": false,
+      "parent_slug": "women"
+    },
+    {
+      "name": "Women's Jackets",
+      "slug": "women-jackets",
+      "description": "Tailored outerwear, raw silk trenches, and cape coats.",
+      "sort_order": 2,
+      "is_coming_soon": false,
+      "parent_slug": "women"
+    },
+    {
+      "name": "Women's T-Shirts",
+      "slug": "women-t-shirts",
+      "description": "Silk-cotton blend tops and minimal crewneck essentials.",
+      "sort_order": 3,
+      "is_coming_soon": false,
+      "parent_slug": "women"
+    },
+    {
+      "name": "Women's Sweaters",
+      "slug": "women-sweaters",
+      "description": "Ribbed cashmere knit tops and fine drape cardigans.",
+      "sort_order": 4,
+      "is_coming_soon": false,
+      "parent_slug": "women"
+    },
+    {
+      "name": "Kids' Hoodies",
+      "slug": "kids-hoodies",
+      "description": "Warm, durable cotton fleece hoodies for kids.",
+      "sort_order": 1,
+      "is_coming_soon": false,
+      "parent_slug": "kids"
+    },
+    {
+      "name": "Kids' Jackets",
+      "slug": "kids-jackets",
+      "description": "Cozy outerwear and light zip-up jackets.",
+      "sort_order": 2,
+      "is_coming_soon": false,
+      "parent_slug": "kids"
+    },
+    {
+      "name": "Kids' T-Shirts",
+      "slug": "kids-t-shirts",
+      "description": "Breathable 100% organic cotton everyday tees.",
+      "sort_order": 3,
+      "is_coming_soon": false,
+      "parent_slug": "kids"
+    },
+    {
+      "name": "Kids' Sweaters",
+      "slug": "kids-sweaters",
+      "description": "Soft knit crewnecks and cozy cardigans.",
+      "sort_order": 4,
+      "is_coming_soon": false,
+      "parent_slug": "kids"
+    }
+  ],
+  "collections": [
+    {
+      "name": "New Arrivals",
+      "slug": "new-arrivals",
+      "description": "Latest seasonal runway drops.",
+      "sort_order": 1
+    },
+    {
+      "name": "Essentials",
+      "slug": "essentials",
+      "description": "Timeless luxury wardrobe staples.",
+      "sort_order": 2
+    },
+    {
+      "name": "Signature Collection",
+      "slug": "signature",
+      "description": "Refined architectural statement pieces.",
+      "sort_order": 3
+    },
+    {
+      "name": "Trending Pieces",
+      "slug": "trending",
+      "description": "Most sought-after seasonal garments.",
+      "sort_order": 4
+    },
+    {
+      "name": "Curated Archive Sale",
+      "slug": "sale",
+      "description": "Limited archive offerings.",
+      "sort_order": 5
+    }
+  ],
+  "products": [
+    {
+      "name": "Relaxed Linen Overshirt",
+      "slug": "relaxed-linen-overshirt",
+      "category_slug": "men-jackets",
+      "subtitle": "Pure washed French linen in sand stone",
+      "description": "Cut for an easy, relaxed drape, this overshirt is crafted from breathable European linen.",
+      "brand_label": "UniNova Atelier",
+      "status": "active",
+      "price": 8950.0,
+      "original_price": 11500.0,
+      "is_featured": true,
+      "is_trending": true,
+      "is_new_arrival": true,
+      "variants": [
+        {
+          "sku": "SHIRT-LINEN-SAND-M",
+          "size": "M",
+          "color_name": "Sand Stone",
+          "color_hex": "#D2B48C",
+          "price": 8950.0,
+          "inventory_count": 25
+        },
+        {
+          "sku": "SHIRT-LINEN-SAND-L",
+          "size": "L",
+          "color_name": "Sand Stone",
+          "color_hex": "#D2B48C",
+          "price": 8950.0,
+          "inventory_count": 30
+        }
+      ],
+      "images": [
+        {
+          "image_url": "https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?q=80&w=1000&auto=format&fit=crop",
+          "alt_text": "Relaxed Linen Overshirt Front View",
+          "is_primary": true
+        }
+      ]
+    },
+    {
+      "name": "Pleated Relaxed Trouser",
+      "slug": "pleated-relaxed-trouser",
+      "category_slug": "men-jeans-pants",
+      "subtitle": "Italian cotton-twill with double forward pleats",
+      "description": "A contemporary wide-leg silhouette featuring double pleats and side adjusters.",
+      "brand_label": "UniNova Sartorial",
+      "status": "active",
+      "price": 12500.0,
+      "original_price": 14500.0,
+      "is_featured": true,
+      "is_trending": false,
+      "is_new_arrival": true,
+      "variants": [
+        {
+          "sku": "TROUSER-TWILL-NAVY-32",
+          "size": "32",
+          "color_name": "Midnight Navy",
+          "color_hex": "#000080",
+          "price": 12500.0,
+          "inventory_count": 15
+        }
+      ],
+      "images": []
+    },
+    {
+      "name": "Sculptural Drape Midi Dress",
+      "slug": "sculptural-drape-midi-dress",
+      "category_slug": "women",
+      "subtitle": "Heavyweight mulberry silk in ivory",
+      "description": "Fluid and architectural, this midi dress features an asymmetric cowl neckline.",
+      "brand_label": "UniNova Atelier",
+      "status": "active",
+      "price": 18500.0,
+      "original_price": null,
+      "is_featured": true,
+      "is_trending": true,
+      "is_new_arrival": true,
+      "variants": [
+        {
+          "sku": "DRESS-SILK-IVORY-S",
+          "size": "S",
+          "color_name": "Ivory",
+          "color_hex": "#FFFFF0",
+          "price": 18500.0,
+          "inventory_count": 12
+        }
+      ],
+      "images": [
+        {
+          "image_url": "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1000&auto=format&fit=crop",
+          "alt_text": "Sculptural Drape Midi Dress Front View",
+          "is_primary": true
+        }
+      ]
+    }
+  ],
+  "coupons": [
+    {
+      "code": "WELCOME10",
+      "discount_type": "percentage",
+      "discount_value": 10.0,
+      "minimum_order_amount": 3000.0,
+      "is_active": true
+    }
+  ]
+}
