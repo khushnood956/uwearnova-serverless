@@ -55,7 +55,7 @@ export interface RegisterRequest {
 }
 
 export interface ChangePasswordRequest {
-  current_password: string;
+  current_password?: string;
   new_password: string;
 }
 

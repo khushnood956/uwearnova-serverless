@@ -13,6 +13,7 @@ import {
   ArrowLeft,
   LogOut,
   Sparkles,
+  UserCog,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { BRAND_CONFIG } from "@/lib/brand";
@@ -94,7 +95,9 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
 
         <div className="flex items-center gap-4 text-xs">
           <div className="hidden sm:block text-right">
-            <p className="text-ivory font-medium truncate max-w-[200px]">{user?.email}</p>
+            <p className="text-ivory font-semibold truncate max-w-[200px]">
+              {user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : user?.email}
+            </p>
             <p className="text-[10px] text-ivory-light/60 uppercase tracking-wider">
               {user?.user_type === "admin" ? "Store Administrator (Full Access)" : "Fulfillment & Operations Specialist"}
             </p>
@@ -119,6 +122,13 @@ export default function StaffLayout({ children }: StaffLayoutProps) {
               ★ Admin Console
             </Link>
           )}
+          <Link
+            href="/staff/profile"
+            className="text-[11px] text-champagne hover:underline font-semibold flex items-center gap-1"
+          >
+            <UserCog className="w-3.5 h-3.5" />
+            <span>Profile & Password</span>
+          </Link>
           <button
             type="button"
             onClick={logout}

@@ -14,6 +14,9 @@ interface AuthContextType {
   login: (credentials: LoginRequest) => Promise<void>;
   register: (data: RegisterRequest) => Promise<{ requiresVerification?: boolean }>;
   logout: () => Promise<void>;
+  updateProfile: (data: { first_name?: string; last_name?: string; phone?: string }) => Promise<void>;
+  changePassword: (newPassword: string) => Promise<void>;
+  refreshUser: () => Promise<void>;
   isAuthModalOpen: boolean;
   authModalTab: "signin" | "register";
   openAuthModal: (tab?: "signin" | "register") => void;
@@ -168,6 +171,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.location.href = "/";
   }, []);
 
+  const updateProfile = React.useCallback(
+    async (data: { first_name?: string; last_name?: string; phone?: string }) => {
+      const updated = await authApi.updateProfile(data);
+      setUser(updated);
+    },
+    []
+  );
+
+  const changePassword = React.useCallback(async (newPassword: string) => {
+    await authApi.changePassword({ new_password: newPassword });
+  }, []);
+
+  const refreshUser = React.useCallback(async () => {
+    const fresh = await authApi.getMe();
+    setUser(fresh);
+  }, []);
+
   const openAuthModal = React.useCallback((tab: "signin" | "register" = "signin") => {
     setAuthModalTab(tab);
     setIsAuthModalOpen(true);
@@ -185,12 +205,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       register,
       logout,
+      updateProfile,
+      changePassword,
+      refreshUser,
       isAuthModalOpen,
       authModalTab,
       openAuthModal,
       closeAuthModal,
     }),
-    [user, isLoading, login, register, logout, isAuthModalOpen, authModalTab, openAuthModal, closeAuthModal]
+    [
+      user,
+      isLoading,
+      login,
+      register,
+      logout,
+      updateProfile,
+      changePassword,
+      refreshUser,
+      isAuthModalOpen,
+      authModalTab,
+      openAuthModal,
+      closeAuthModal,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

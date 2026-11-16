@@ -12,15 +12,12 @@ export async function POST(request: NextRequest) {
 
     const supabaseAdmin = createAdminClient();
 
-    // Verify creator authority: Only admin1 (super_admin) can create super_admin accounts
-    if (role === "super_admin") {
-      const isSuperAdminRequester = requesterEmail === "admin1@uwearnova.com";
-      if (!isSuperAdminRequester) {
-        return NextResponse.json(
-          { error: "Access Denied: Only the Lead Super Administrator (admin1) can create another Super Administrator." },
-          { status: 403 }
-        );
-      }
+    // Verify creator authority: Only the Lead Super Administrator (admin1) is authorized to create accounts
+    if (requesterEmail !== "admin1@uwearnova.com") {
+      return NextResponse.json(
+        { error: "Access Denied: Only the Lead Super Administrator (admin1@uwearnova.com) can provision administrative and staff accounts." },
+        { status: 403 }
+      );
     }
 
     // Determine user_type (admin or staff)

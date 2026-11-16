@@ -179,4 +179,60 @@ export const authApi = {
       throw new Error(error.message);
     }
   },
+
+  async updateProfile(data: { first_name?: string; last_name?: string; phone?: string }): Promise<UserResponse> {
+    cachedUserResponse = null;
+    cachedAuthUserId = null;
+    lastMeFetchTime = 0;
+
+    const { data: authData, error: authErr } = await supabase.auth.updateUser({
+      data: {
+        first_name: data.first_name,
+        last_name: data.last_name,
+        phone: data.phone,
+      },
+    });
+
+    if (authErr) {
+      throw new Error(authErr.message);
+    }
+
+    const authUser = authData.user;
+    if (authUser) {
+      try {
+        await supabase
+          .from("users")
+          .update({
+            phone: data.phone || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("auth_user_id", authUser.id);
+      } catch {
+        // ignore public.users update error
+      }
+
+      try {
+        const { data: domainUser } = await supabase
+          .from("users")
+          .select("id")
+          .eq("auth_user_id", authUser.id)
+          .maybeSingle();
+
+        if (domainUser) {
+          await supabase
+            .from("customer_profiles")
+            .upsert({
+              user_id: domainUser.id,
+              first_name: data.first_name || "",
+              last_name: data.last_name || "",
+              phone: data.phone || null,
+            });
+        }
+      } catch {
+        // ignore customer_profiles update error
+      }
+    }
+
+    return await this.getMe();
+  },
 };

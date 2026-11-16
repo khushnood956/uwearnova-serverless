@@ -1,9 +1,11 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   Users,
   UserPlus,
+  ShieldAlert,
   ShieldCheck,
   Key,
   Copy,
@@ -174,6 +176,29 @@ export default function AdminStaffManagementPage() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
+
+  if (user && user.email !== "admin1@uwearnova.com") {
+    return (
+      <div className="max-w-2xl mx-auto py-16 text-center space-y-4">
+        <div className="w-14 h-14 rounded-full bg-crimson/10 text-crimson flex items-center justify-center mx-auto">
+          <ShieldAlert className="w-7 h-7" />
+        </div>
+        <h2 className="font-serif text-2xl font-medium text-obsidian">Super Administrator Authority Required</h2>
+        <p className="text-xs text-obsidian-600 font-light max-w-md mx-auto leading-relaxed">
+          Staff provisioning and account creation are strictly restricted to the Lead Super Administrator (admin1@uwearnova.com).
+          Store Administrators (admin2 and admin3) possess full operational authority over Catalog, Offline POS Counter, Delivery Rates, Settings, and Order Operations.
+        </p>
+        <div className="pt-2">
+          <Link
+            href="/admin"
+            className="inline-block px-5 py-2.5 rounded-button bg-obsidian text-ivory text-xs font-semibold uppercase tracking-wider hover:bg-obsidian-800 transition-colors"
+          >
+            Return to Store Overview
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-7xl">

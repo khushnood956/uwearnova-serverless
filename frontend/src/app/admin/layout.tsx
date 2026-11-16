@@ -17,6 +17,7 @@ import {
   Sparkles,
   Store,
   Sliders,
+  UserCog,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { BRAND_CONFIG } from "@/lib/brand";
@@ -27,6 +28,7 @@ interface AdminLayoutProps {
 
 const ADMIN_NAV = [
   { name: "Executive Overview", href: "/admin", icon: LayoutDashboard },
+  { name: "My Profile & Security", href: "/admin/profile", icon: UserCog },
   { name: "Rates & Payment Settings", href: "/admin/settings", icon: Sliders },
   { name: "Offline Sales (POS)", href: "/admin/pos", icon: Store },
   { name: "Departments & Categories", href: "/admin/categories", icon: FolderTree },
@@ -122,7 +124,13 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
           {/* Navigation Items */}
           <nav className="p-3 space-y-1">
-            {ADMIN_NAV.map((item) => {
+            {ADMIN_NAV.filter((item) => {
+              // Only admin1 (Super Admin) is authorized to view and manage Staff & Administrators
+              if (item.href === "/admin/staff" && user?.email !== "admin1@uwearnova.com") {
+                return false;
+              }
+              return true;
+            }).map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href));
               return (
@@ -146,11 +154,22 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         {/* Footer User Info */}
         <div className="p-4 border-t border-white/10 text-xs text-ivory-light/70 space-y-3">
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-ivory-light/50 font-semibold">Administrator</p>
-            <p className="text-xs font-medium text-ivory truncate">{user?.email}</p>
+            <p className="text-[10px] uppercase tracking-wider text-champagne font-semibold">
+              {user?.email === "admin1@uwearnova.com" ? "★ Super Administrator" : "Store Administrator"}
+            </p>
+            <p className="text-xs font-semibold text-ivory truncate mt-0.5">
+              {user?.first_name ? `${user.first_name} ${user.last_name || ""}`.trim() : user?.email}
+            </p>
+            <p className="text-[11px] text-ivory-light/50 truncate">{user?.email}</p>
           </div>
-          <div className="flex items-center justify-between pt-1">
-            <span className="text-[11px] text-ivory-light/40">Secure Portal</span>
+          <div className="flex items-center justify-between pt-1 border-t border-white/5">
+            <Link
+              href="/admin/profile"
+              className="text-[11px] text-champagne hover:underline inline-flex items-center gap-1 font-semibold"
+            >
+              <UserCog className="w-3.5 h-3.5" />
+              <span>Password & Name</span>
+            </Link>
             <button
               type="button"
               onClick={logout}
