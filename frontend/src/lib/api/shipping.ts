@@ -76,9 +76,14 @@ export const shippingApi = {
       // fallback
     }
 
-    const quoteMethods: ShippingMethodQuoteItem[] = (methods || []).map((m: any) => {
-      const baseFee = Number(m.base_rate || dynamicBaseFee);
-      const freeThreshold = Number(m.free_threshold || dynamicFreeThreshold);
+    const quoteMethods: ShippingMethodQuoteItem[] = (methods && methods.length > 0 ? methods : [{
+      code: "standard",
+      name: "Standard Nationwide Courier Delivery",
+      estimated_days: "2-4 business days",
+    }]).map((m: any) => {
+      // Prioritize live dynamic settings configured by administrator
+      const baseFee = Number(dynamicBaseFee || m.base_rate || 350);
+      const freeThreshold = Number(dynamicFreeThreshold || m.free_threshold || 5000);
       const isFree = subtotal >= freeThreshold;
       const finalFee = isFree ? 0.00 : baseFee;
 

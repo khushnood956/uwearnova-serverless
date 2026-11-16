@@ -19,9 +19,11 @@ import {
 } from "lucide-react";
 import { settingsApi, DynamicStoreSettings, DEFAULT_STORE_SETTINGS, StoreBundle } from "@/lib/api/settings";
 import { discountsApi, CouponItem } from "@/lib/api/discounts";
+import { useAuth } from "@/context/AuthContext";
 import { formatPKR } from "@/lib/brand";
 
 export default function AdminSettingsPage() {
+  const { user } = useAuth();
   const [settings, setSettings] = React.useState<DynamicStoreSettings>(DEFAULT_STORE_SETTINGS);
   const [coupons, setCoupons] = React.useState<CouponItem[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -70,7 +72,7 @@ export default function AdminSettingsPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      await settingsApi.updateSettings(settings);
+      await settingsApi.updateSettings(settings, user?.email);
       showNotification("Store rates & payment options saved successfully!");
     } catch (err: any) {
       showNotification(err.message || "Failed to update settings", "error");
@@ -153,17 +155,21 @@ export default function AdminSettingsPage() {
 
   return (
     <div className="space-y-8 max-w-6xl">
-      {/* Toast */}
+      {/* Toast Notification with Guaranteed High-Contrast Colors */}
       {notification && (
         <div
-          className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl shadow-card text-xs font-medium flex items-center gap-2 border animate-in slide-in-from-bottom-2 ${
+          className={`fixed bottom-6 right-6 z-50 max-w-md px-5 py-3.5 rounded-xl shadow-2xl text-xs font-semibold flex items-center gap-3 border animate-in slide-in-from-bottom-2 ${
             notification.type === "success"
-              ? "bg-emerald-950 text-emerald-200 border-emerald-800"
-              : "bg-crimson text-ivory border-crimson/80"
+              ? "bg-[#064E3B] text-white border-[#059669] shadow-emerald-950/40"
+              : "bg-[#7F1D1D] text-white border-[#DC2626] shadow-red-950/50"
           }`}
         >
-          {notification.type === "success" ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-          <span>{notification.text}</span>
+          {notification.type === "success" ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-300 shrink-0" />
+          ) : (
+            <AlertCircle className="w-5 h-5 text-red-200 shrink-0" />
+          )}
+          <span className="leading-snug">{notification.text}</span>
         </div>
       )}
 
@@ -301,32 +307,161 @@ export default function AdminSettingsPage() {
               </label>
             </div>
 
-            {/* Bank Transfer Switch */}
-            <div className="p-3.5 rounded-xl border border-hairline bg-white flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Building className="w-5 h-5 text-champagne-dark" />
-                <div>
-                  <p className="font-semibold text-obsidian">Direct Bank Transfer / IBFT</p>
-                  <p className="text-[11px] text-obsidian-500 font-light">Direct account deposits</p>
+            {/* Bank Transfer Switch & Account Details */}
+            <div className="p-3.5 rounded-xl border border-hairline bg-white space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Building className="w-5 h-5 text-champagne-dark" />
+                  <div>
+                    <p className="font-semibold text-obsidian">Direct Bank Transfer / IBFT</p>
+                    <p className="text-[11px] text-obsidian-500 font-light">Direct account deposits & bank wire</p>
+                  </div>
                 </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.payment_methods.bank_transfer.enabled}
+                    onChange={(e) =>
+                      setSettings((p) => ({
+                        ...p,
+                        payment_methods: {
+                          ...p.payment_methods,
+                          bank_transfer: { ...p.payment_methods.bank_transfer, enabled: e.target.checked },
+                        },
+                      }))
+                    }
+                    className="sr-only peer"
+                  />
+                  <div className="w-10 h-5 bg-obsidian-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600" />
+                </label>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.payment_methods.bank_transfer.enabled}
-                  onChange={(e) =>
-                    setSettings((p) => ({
-                      ...p,
-                      payment_methods: {
-                        ...p.payment_methods,
-                        bank_transfer: { ...p.payment_methods.bank_transfer, enabled: e.target.checked },
-                      },
-                    }))
-                  }
-                  className="sr-only peer"
-                />
-                <div className="w-10 h-5 bg-obsidian-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600" />
-              </label>
+
+              {settings.payment_methods.bank_transfer.enabled && (
+                <div className="pt-3 border-t border-hairline space-y-3 animate-in fade-in-50 duration-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-champagne-dark uppercase tracking-wider">
+                      Bank Account Details for Clients
+                    </span>
+                    <span className="text-[10px] text-obsidian-500">Displayed at checkout when selected</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div className="space-y-1">
+                      <label className="font-semibold text-obsidian">Bank Name</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Meezan Bank Ltd / HBL"
+                        value={settings.payment_methods.bank_transfer.bank_name || ""}
+                        onChange={(e) =>
+                          setSettings((p) => ({
+                            ...p,
+                            payment_methods: {
+                              ...p.payment_methods,
+                              bank_transfer: { ...p.payment_methods.bank_transfer, bank_name: e.target.value },
+                            },
+                          }))
+                        }
+                        className="w-full px-3 py-2 rounded-lg border border-hairline bg-ivory text-xs"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="font-semibold text-obsidian">Account Title / Beneficiary</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. UWEARNOVA LUXURY ATELIER"
+                        value={settings.payment_methods.bank_transfer.account_title || ""}
+                        onChange={(e) =>
+                          setSettings((p) => ({
+                            ...p,
+                            payment_methods: {
+                              ...p.payment_methods,
+                              bank_transfer: { ...p.payment_methods.bank_transfer, account_title: e.target.value },
+                            },
+                          }))
+                        }
+                        className="w-full px-3 py-2 rounded-lg border border-hairline bg-ivory text-xs font-semibold"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="font-semibold text-obsidian">Account Number</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 02100109283746"
+                        value={settings.payment_methods.bank_transfer.account_number || ""}
+                        onChange={(e) =>
+                          setSettings((p) => ({
+                            ...p,
+                            payment_methods: {
+                              ...p.payment_methods,
+                              bank_transfer: { ...p.payment_methods.bank_transfer, account_number: e.target.value },
+                            },
+                          }))
+                        }
+                        className="w-full px-3 py-2 rounded-lg border border-hairline bg-ivory text-xs font-mono"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="font-semibold text-obsidian">IBAN (24 Characters)</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. PK36MEZN0002100109283746"
+                        value={settings.payment_methods.bank_transfer.iban || ""}
+                        onChange={(e) =>
+                          setSettings((p) => ({
+                            ...p,
+                            payment_methods: {
+                              ...p.payment_methods,
+                              bank_transfer: { ...p.payment_methods.bank_transfer, iban: e.target.value.toUpperCase() },
+                            },
+                          }))
+                        }
+                        className="w-full px-3 py-2 rounded-lg border border-hairline bg-ivory text-xs font-mono uppercase"
+                      />
+                    </div>
+
+                    <div className="space-y-1 sm:col-span-2">
+                      <label className="font-semibold text-obsidian">Branch / City</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Cantt Branch, Sialkot, Punjab, Pakistan"
+                        value={settings.payment_methods.bank_transfer.branch || ""}
+                        onChange={(e) =>
+                          setSettings((p) => ({
+                            ...p,
+                            payment_methods: {
+                              ...p.payment_methods,
+                              bank_transfer: { ...p.payment_methods.bank_transfer, branch: e.target.value },
+                            },
+                          }))
+                        }
+                        className="w-full px-3 py-2 rounded-lg border border-hairline bg-ivory text-xs"
+                      />
+                    </div>
+
+                    <div className="space-y-1 sm:col-span-2">
+                      <label className="font-semibold text-obsidian">Customer Deposit Instructions</label>
+                      <textarea
+                        rows={2}
+                        placeholder="e.g. Please share payment receipt on WhatsApp (+92 300 0000000) or email support@uwearnova.com with your Order Number."
+                        value={settings.payment_methods.bank_transfer.instructions || ""}
+                        onChange={(e) =>
+                          setSettings((p) => ({
+                            ...p,
+                            payment_methods: {
+                              ...p.payment_methods,
+                              bank_transfer: { ...p.payment_methods.bank_transfer, instructions: e.target.value },
+                            },
+                          }))
+                        }
+                        className="w-full px-3 py-2 rounded-lg border border-hairline bg-ivory text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

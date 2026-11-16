@@ -18,6 +18,8 @@ export default function CartPage() {
     updateQuantity,
     totalItems,
     subtotal,
+    deliveryFee,
+    shippingFee,
     isFreeShipping,
     amountNeededForFreeShipping,
     freeShippingThreshold,
@@ -134,7 +136,7 @@ export default function CartPage() {
                           Free
                         </span>
                       ) : (
-                        formatPKR(350)
+                        formatPKR(deliveryFee)
                       )}
                     </span>
                   </div>
@@ -142,7 +144,7 @@ export default function CartPage() {
                   <div className="flex justify-between pt-3 text-base font-semibold text-obsidian">
                     <span>Total Due</span>
                     <span className="font-serif text-xl font-medium">
-                      {formatPKR(subtotal + (isFreeShipping ? 0 : 350))}
+                      {formatPKR(subtotal + shippingFee)}
                     </span>
                   </div>
                 </div>

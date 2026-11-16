@@ -7,6 +7,7 @@ import { BRAND_CONFIG } from "@/lib/brand";
 import { cartApi } from "@/lib/api/cart";
 import { CartResponse } from "@/lib/api/types";
 import { mapBackendCartItem } from "@/lib/api/adapters";
+import { settingsApi, DynamicStoreSettings } from "@/lib/api/settings";
 
 interface CartContextType {
   items: CartItem[];
@@ -17,6 +18,8 @@ interface CartContextType {
   refreshCart: () => Promise<void>;
   totalItems: number;
   subtotal: number;
+  deliveryFee: number;
+  shippingFee: number;
   freeShippingThreshold: number;
   amountNeededForFreeShipping: number;
   isFreeShipping: boolean;
@@ -32,10 +35,15 @@ const CART_STORAGE_KEY = "uwearnova_cart_v1";
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [serverCart, setServerCart] = React.useState<CartResponse | null>(null);
+  const [storeSettings, setStoreSettings] = React.useState<DynamicStoreSettings | null>(null);
   const [localItems, setLocalItems] = React.useState<CartItem[]>([]);
   const [isCartDrawerOpen, setIsCartDrawerOpen] = React.useState(false);
   const [isHydrated, setIsHydrated] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    settingsApi.getSettings().then(setStoreSettings).catch(() => {});
+  }, []);
 
   // Fetch server cart
   const refreshCart = React.useCallback(async () => {
@@ -218,13 +226,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     );
   }, [serverCart, items]);
 
-  const freeShippingThreshold = serverCart
-    ? Number(serverCart.free_shipping_threshold)
-    : BRAND_CONFIG.freeShippingThreshold;
+  const freeShippingThreshold = Number(
+    serverCart?.free_shipping_threshold ?? storeSettings?.free_shipping_threshold ?? BRAND_CONFIG.freeShippingThreshold
+  );
+
+  const deliveryFee = Number(
+    serverCart?.shipping_estimate && Number(serverCart.shipping_estimate) > 0
+      ? serverCart.shipping_estimate
+      : storeSettings?.delivery_fee ?? 350
+  );
 
   const isFreeShipping = serverCart
     ? serverCart.is_free_shipping
     : subtotal >= freeShippingThreshold;
+
+  const shippingFee = totalItems === 0 || isFreeShipping ? 0 : deliveryFee;
 
   const amountNeededForFreeShipping = serverCart
     ? Number((serverCart as any).amount_needed_for_free_shipping ?? (serverCart as any).amount_for_free_shipping ?? 0)
@@ -239,6 +255,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     refreshCart,
     totalItems,
     subtotal,
+    deliveryFee,
+    shippingFee,
     freeShippingThreshold,
     amountNeededForFreeShipping,
     isFreeShipping,

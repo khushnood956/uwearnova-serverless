@@ -59,7 +59,7 @@ export default async function TermsPage() {
             <div className="pt-6 space-y-3">
               <h2 className="font-serif text-xl font-medium text-obsidian">3. Shipping & Delivery Terms</h2>
               <p>
-                Standard delivery fee across Pakistan is {formatPKR(350)}. Complimentary delivery applies automatically to qualifying orders over {formatPKR(BRAND_CONFIG.freeShippingThreshold)}. Estimated transit timelines are 2–4 business days across major urban hubs. Delivery times are estimates provided by domestic courier partners and may vary during national holidays or adverse transit conditions.
+                Standard courier delivery rates are dynamically displayed during checkout. Complimentary delivery applies automatically to qualifying domestic orders meeting the store threshold. Estimated transit timelines are 2–4 business days across major urban hubs. Delivery times are estimates provided by domestic courier partners and may vary during national holidays or adverse transit conditions.
               </p>
             </div>
 

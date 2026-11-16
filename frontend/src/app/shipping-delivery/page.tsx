@@ -56,7 +56,7 @@ export default function ShippingPage() {
             </div>
             <h3 className="font-serif text-lg font-medium text-obsidian">Complimentary Freight</h3>
             <p className="text-xs sm:text-sm text-obsidian-600 leading-relaxed font-light">
-              Free nationwide delivery on all orders over {formatPKR(BRAND_CONFIG.freeShippingThreshold)}. Standard rate of {formatPKR(350)} applies below.
+              Complimentary nationwide courier delivery applies to qualifying orders. Standard courier rate applies to other domestic orders, with live rates displayed dynamically at checkout.
             </p>
           </div>
         </div>

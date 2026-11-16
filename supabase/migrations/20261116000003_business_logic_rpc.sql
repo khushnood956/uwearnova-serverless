@@ -492,7 +492,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth, pg_temp;
 -- 5. Analytical Views for Admin Reporting
 -- ------------------------------------------------------------------------------
 
-CREATE OR REPLACE VIEW public.v_admin_sales_overview AS
+CREATE OR REPLACE VIEW public.v_admin_sales_overview WITH (security_invoker = true) AS
 SELECT
   COALESCE(SUM(grand_total), 0.00) AS gross_sales,
   COALESCE(SUM(CASE WHEN payment_status = 'paid' THEN grand_total ELSE 0.00 END), 0.00) AS collected_revenue,
@@ -503,7 +503,7 @@ SELECT
   COUNT(CASE WHEN status = 'cancelled' THEN 1 END) AS cancelled_orders
 FROM public.orders;
 
-CREATE OR REPLACE VIEW public.v_low_stock_alerts AS
+CREATE OR REPLACE VIEW public.v_low_stock_alerts WITH (security_invoker = true) AS
 SELECT
   p.name AS product_name,
   pv.sku,

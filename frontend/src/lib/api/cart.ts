@@ -11,6 +11,7 @@ import {
   WishlistItemResponse,
   WishlistResponse,
 } from "./types";
+import { settingsApi } from "./settings";
 
 const FREE_SHIPPING_THRESHOLD = 5000.00;
 const STANDARD_SHIPPING_FEE = 350.00;
@@ -141,12 +142,26 @@ export const cartApi = {
         };
       });
 
+      let dynamicThreshold = FREE_SHIPPING_THRESHOLD;
+      let dynamicShippingFee = STANDARD_SHIPPING_FEE;
+      try {
+        const storeSettings = await settingsApi.getSettings();
+        if (storeSettings.free_shipping_threshold !== undefined) {
+          dynamicThreshold = Number(storeSettings.free_shipping_threshold);
+        }
+        if (storeSettings.delivery_fee !== undefined) {
+          dynamicShippingFee = Number(storeSettings.delivery_fee);
+        }
+      } catch {
+        // fallback
+      }
+
       const totalItems = cartItems.reduce((acc, item) => acc + item.quantity, 0);
       const subtotal = cartItems.reduce((acc, item) => acc + Number(item.line_subtotal), 0);
-      const isFreeShipping = subtotal >= FREE_SHIPPING_THRESHOLD;
-      const shippingEstimate = totalItems === 0 || isFreeShipping ? 0.00 : STANDARD_SHIPPING_FEE;
+      const isFreeShipping = subtotal >= dynamicThreshold;
+      const shippingEstimate = totalItems === 0 || isFreeShipping ? 0.00 : dynamicShippingFee;
       const grandTotal = subtotal + shippingEstimate;
-      const amountForFreeShipping = Math.max(0, FREE_SHIPPING_THRESHOLD - subtotal);
+      const amountForFreeShipping = Math.max(0, dynamicThreshold - subtotal);
 
       return {
         id: cartId,
@@ -158,7 +173,7 @@ export const cartApi = {
         grand_total: grandTotal,
         is_free_shipping: isFreeShipping,
         amount_for_free_shipping: amountForFreeShipping,
-        free_shipping_threshold: FREE_SHIPPING_THRESHOLD,
+        free_shipping_threshold: dynamicThreshold,
         currency: "PKR",
       };
     } catch (e: any) {

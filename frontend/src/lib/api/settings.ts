@@ -7,6 +7,15 @@ export interface PaymentMethodConfig {
   details?: string;
 }
 
+export interface BankTransferConfig extends PaymentMethodConfig {
+  bank_name?: string;
+  account_title?: string;
+  account_number?: string;
+  iban?: string;
+  branch?: string;
+  instructions?: string;
+}
+
 export interface StoreBundle {
   id: string;
   name: string;
@@ -24,7 +33,7 @@ export interface DynamicStoreSettings {
   payment_methods: {
     cod: PaymentMethodConfig;
     card: PaymentMethodConfig;
-    bank_transfer: PaymentMethodConfig;
+    bank_transfer: BankTransferConfig;
   };
   bundles: StoreBundle[];
 }
@@ -47,7 +56,13 @@ export const DEFAULT_STORE_SETTINGS: DynamicStoreSettings = {
       enabled: false,
       title: "Direct Bank Transfer / IBFT",
       description: "Transfer directly to corporate atelier account (Meezan / HBL).",
-      details: "Meezan Bank Ltd | Account: 02100109283746 | Title: UWEARNOVA LUXURY",
+      bank_name: "Meezan Bank Ltd",
+      account_title: "UWEARNOVA LUXURY ATELIER",
+      account_number: "02100109283746",
+      iban: "PK36MEZN0002100109283746",
+      branch: "Sialkot Cantt Branch",
+      instructions: "Please send payment confirmation screenshot via WhatsApp to +92 300 0000000 or email support@uwearnova.com with your Order Number.",
+      details: "Meezan Bank Ltd | Account: 02100109283746 | Title: UWEARNOVA LUXURY ATELIER | IBAN: PK36MEZN0002100109283746",
     },
   },
   bundles: [
@@ -73,7 +88,7 @@ export const DEFAULT_STORE_SETTINGS: DynamicStoreSettings = {
 };
 
 let memoryCache: { settings: DynamicStoreSettings; fetchedAt: number } | null = null;
-const CACHE_TTL_MS = 15000; // 15 seconds
+const CACHE_TTL_MS = 10000; // 10 seconds
 
 export const settingsApi = {
   async getSettings(): Promise<DynamicStoreSettings> {
@@ -83,29 +98,43 @@ export const settingsApi = {
     }
 
     try {
-      const { data, error } = await supabase
-        .from("audit_logs")
-        .select("changes")
-        .eq("entity_type", "store_settings")
-        .eq("entity_id", "default")
-        .order("created_at", { ascending: false })
-        .limit(1)
+      // 1. Primary: read from public.store_settings (has public read RLS policy)
+      const { data: storeRow, error: storeErr } = await supabase
+        .from("store_settings")
+        .select("value")
+        .eq("key", "general_config")
         .maybeSingle();
 
-      if (error || !data || !data.changes) {
+      let changes = storeRow?.value;
+
+      // 2. Secondary: fallback to audit_logs snapshot if store_settings was empty
+      if (!changes || storeErr) {
+        const { data: auditRow } = await supabase
+          .from("audit_logs")
+          .select("changes")
+          .eq("entity_type", "store_settings")
+          .eq("entity_id", "default")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        changes = auditRow?.changes;
+      }
+
+      if (!changes) {
         return DEFAULT_STORE_SETTINGS;
       }
 
       const merged: DynamicStoreSettings = {
-        delivery_fee: Number(data.changes.delivery_fee ?? DEFAULT_STORE_SETTINGS.delivery_fee),
-        free_shipping_threshold: Number(data.changes.free_shipping_threshold ?? DEFAULT_STORE_SETTINGS.free_shipping_threshold),
+        delivery_fee: Number(changes.delivery_fee ?? DEFAULT_STORE_SETTINGS.delivery_fee),
+        free_shipping_threshold: Number(changes.free_shipping_threshold ?? DEFAULT_STORE_SETTINGS.free_shipping_threshold),
         payment_methods: {
-          cod: { ...DEFAULT_STORE_SETTINGS.payment_methods.cod, ...(data.changes.payment_methods?.cod || {}) },
-          card: { ...DEFAULT_STORE_SETTINGS.payment_methods.card, ...(data.changes.payment_methods?.card || {}) },
-          bank_transfer: { ...DEFAULT_STORE_SETTINGS.payment_methods.bank_transfer, ...(data.changes.payment_methods?.bank_transfer || {}) },
+          cod: { ...DEFAULT_STORE_SETTINGS.payment_methods.cod, ...(changes.payment_methods?.cod || {}) },
+          card: { ...DEFAULT_STORE_SETTINGS.payment_methods.card, ...(changes.payment_methods?.card || {}) },
+          bank_transfer: { ...DEFAULT_STORE_SETTINGS.payment_methods.bank_transfer, ...(changes.payment_methods?.bank_transfer || {}) },
         },
-        bundles: Array.isArray(data.changes.bundles) && data.changes.bundles.length > 0
-          ? data.changes.bundles
+        bundles: Array.isArray(changes.bundles) && changes.bundles.length > 0
+          ? changes.bundles
           : DEFAULT_STORE_SETTINGS.bundles,
       };
 
@@ -119,30 +148,72 @@ export const settingsApi = {
   async updateSettings(newSettings: DynamicStoreSettings, actorEmail?: string): Promise<DynamicStoreSettings> {
     memoryCache = null;
 
-    // 1. Persist to audit_logs store_settings snapshot
-    const { error } = await supabase.from("audit_logs").insert({
-      action: "SETTINGS_UPDATE",
-      entity_type: "store_settings",
-      entity_id: "default",
-      actor_email: actorEmail || "admin@uwearnova.com",
-      changes: newSettings,
-    });
-
-    if (error) {
-      throw new Error(`Failed to save settings: ${error.message}`);
+    // Format details field for bank transfer
+    const bt = newSettings.payment_methods.bank_transfer;
+    if (bt) {
+      const parts = [
+        bt.bank_name ? `Bank: ${bt.bank_name}` : null,
+        bt.account_title ? `Title: ${bt.account_title}` : null,
+        bt.account_number ? `A/C: ${bt.account_number}` : null,
+        bt.iban ? `IBAN: ${bt.iban}` : null,
+        bt.branch ? `Branch: ${bt.branch}` : null,
+      ].filter(Boolean);
+      bt.details = parts.join(" | ");
     }
 
-    // 2. Also update database shipping_methods base_rate for consistency
+    // 1. Prefer API endpoint which uses service role client (completely immune to RLS restrictions)
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings: newSettings, actorEmail }),
+      });
+
+      if (res.ok) {
+        memoryCache = { settings: newSettings, fetchedAt: Date.now() };
+        return newSettings;
+      }
+    } catch {
+      // fallback to direct client call if fetch fails (e.g. non-browser environment)
+    }
+
+    // 2. Direct Supabase fallback
+    const { error: storeErr } = await supabase
+      .from("store_settings")
+      .upsert({
+        key: "general_config",
+        value: newSettings,
+        updated_at: new Date().toISOString(),
+        updated_by: actorEmail || "admin@uwearnova.com",
+      });
+
+    if (storeErr) {
+      throw new Error(`Failed to save settings: ${storeErr.message}`);
+    }
+
+    try {
+      await supabase.from("audit_logs").insert({
+        action: "SETTINGS_UPDATE",
+        entity_type: "store_settings",
+        entity_id: "default",
+        actor_email: actorEmail || "admin@uwearnova.com",
+        changes: newSettings,
+      });
+    } catch {
+      // Non-fatal
+    }
+
     try {
       await supabase
         .from("shipping_methods")
         .update({
           base_rate: newSettings.delivery_fee,
           free_threshold: newSettings.free_shipping_threshold,
+          updated_at: new Date().toISOString(),
         })
         .neq("id", -1);
     } catch {
-      // ignore
+      // Non-fatal
     }
 
     memoryCache = { settings: newSettings, fetchedAt: Date.now() };

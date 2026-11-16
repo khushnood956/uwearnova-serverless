@@ -7,9 +7,9 @@ import { useCart } from "@/context/CartContext";
 import { formatPKR } from "@/lib/brand";
 
 export function OrderSummarySidebar() {
-  const { items, subtotal, isFreeShipping, totalItems } = useCart();
-  const shippingFee = isFreeShipping ? 0 : 350;
-  const grandTotal = subtotal + shippingFee;
+  const { items, subtotal, isFreeShipping, totalItems, deliveryFee, shippingFee } = useCart();
+  const fee = isFreeShipping ? 0 : deliveryFee;
+  const grandTotal = subtotal + fee;
 
   return (
     <div className="p-6 sm:p-8 rounded-card bg-ivory-sand border border-hairline shadow-subtle space-y-6">
@@ -62,7 +62,7 @@ export function OrderSummarySidebar() {
                 Free
               </span>
             ) : (
-              formatPKR(shippingFee)
+              formatPKR(fee)
             )}
           </span>
         </div>

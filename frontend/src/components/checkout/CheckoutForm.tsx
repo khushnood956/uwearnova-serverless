@@ -686,9 +686,56 @@ export function CheckoutForm() {
                   <p className="text-xs text-obsidian-600 font-light mt-1">
                     {bank_transfer.description}
                   </p>
-                  {bank_transfer.details && (
-                    <div className="mt-2 p-2.5 rounded bg-ivory-sand/60 font-mono text-[11px] text-obsidian">
-                      {bank_transfer.details}
+
+                  {/* Bank Account Details Card */}
+                  {paymentMethod === "bank_transfer" && (
+                    <div className="mt-3 p-3.5 rounded-xl bg-ivory-sand/90 border border-champagne-dark/40 space-y-2 text-xs">
+                      <div className="flex items-center justify-between pb-1.5 border-b border-champagne-dark/20 text-champagne-dark font-semibold">
+                        <span>Official Atelier Deposit Account</span>
+                        <span className="text-[10px] uppercase font-bold tracking-wider">IBFT Transfer</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                        {bank_transfer.bank_name && (
+                          <div>
+                            <span className="text-obsidian-500 block text-[10px]">Bank Name:</span>
+                            <span className="font-semibold text-obsidian">{bank_transfer.bank_name}</span>
+                          </div>
+                        )}
+                        {bank_transfer.account_title && (
+                          <div>
+                            <span className="text-obsidian-500 block text-[10px]">Account Title:</span>
+                            <span className="font-semibold text-obsidian">{bank_transfer.account_title}</span>
+                          </div>
+                        )}
+                        {bank_transfer.account_number && (
+                          <div>
+                            <span className="text-obsidian-500 block text-[10px]">Account Number:</span>
+                            <span className="font-mono font-bold text-obsidian">{bank_transfer.account_number}</span>
+                          </div>
+                        )}
+                        {bank_transfer.iban && (
+                          <div>
+                            <span className="text-obsidian-500 block text-[10px]">IBAN:</span>
+                            <span className="font-mono font-bold text-obsidian uppercase">{bank_transfer.iban}</span>
+                          </div>
+                        )}
+                        {bank_transfer.branch && (
+                          <div className="sm:col-span-2">
+                            <span className="text-obsidian-500 block text-[10px]">Branch:</span>
+                            <span className="text-obsidian">{bank_transfer.branch}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {bank_transfer.instructions ? (
+                        <div className="pt-2 border-t border-hairline text-[11px] text-obsidian-600 font-light leading-relaxed">
+                          <strong>Instructions:</strong> {bank_transfer.instructions}
+                        </div>
+                      ) : bank_transfer.details ? (
+                        <div className="pt-2 border-t border-hairline font-mono text-[11px] text-obsidian">
+                          {bank_transfer.details}
+                        </div>
+                      ) : null}
                     </div>
                   )}
                 </div>

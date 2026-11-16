@@ -108,7 +108,7 @@ export const ordersApi = {
       shipping_address: data.shipping_address,
       shipping_method_code: data.shipping_method_code || "standard",
       shipping_method_name: "Standard Delivery",
-      shipping_fee: Number(activeCart.shipping_estimate) || 350.00,
+      shipping_fee: activeCart.is_free_shipping ? 0.00 : Number(activeCart.shipping_estimate ?? 350.00),
       discount_amount: Number(activeCart.discount_total) || 0.00,
       payment_method: data.payment_method || "cod",
       customer_note: data.customer_note || null,
