@@ -50,15 +50,15 @@ export default function AdminNewProductPage() {
 
   // Image State
   const [uploadTab, setUploadTab] = React.useState<"file" | "url">("file");
-  const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = React.useState<File[]>([]);
   const [previewUrl, setPreviewUrl] = React.useState<string>("");
   const [imageUrlInput, setImageUrlInput] = React.useState<string>("");
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      const objUrl = URL.createObjectURL(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      setSelectedFiles(files);
+      const objUrl = URL.createObjectURL(files[0]);
       setPreviewUrl(objUrl);
       setImageUrlInput("");
     }
@@ -66,12 +66,12 @@ export default function AdminNewProductPage() {
 
   const handleUrlChange = (val: string) => {
     setImageUrlInput(val);
-    setSelectedFile(null);
+    setSelectedFiles([]);
     setPreviewUrl(val.trim());
   };
 
   const handleClearImage = () => {
-    setSelectedFile(null);
+    setSelectedFiles([]);
     setPreviewUrl("");
     setImageUrlInput("");
   };
@@ -253,16 +253,18 @@ export default function AdminNewProductPage() {
         });
       }
 
-      // 3. Attach image (file upload or URL)
-      if (selectedFile) {
-        try {
-          const fd = new FormData();
-          fd.append("file", selectedFile);
-          fd.append("alt_text", form.name);
-          fd.append("is_primary", "true");
-          await adminApi.uploadProductImage(createdProduct.id, fd);
-        } catch (imgErr) {
-          console.warn("Could not upload image file:", imgErr);
+      // 3. Attach image(s) (file upload or URL)
+      if (selectedFiles.length > 0) {
+        for (let i = 0; i < selectedFiles.length; i++) {
+          try {
+            const fd = new FormData();
+            fd.append("file", selectedFiles[i]);
+            fd.append("alt_text", form.name);
+            fd.append("is_primary", String(i === 0));
+            await adminApi.uploadProductImage(createdProduct.id, fd);
+          } catch (imgErr) {
+            console.warn(`Could not upload image file #${i + 1}:`, imgErr);
+          }
         }
       } else if (imageUrlInput && imageUrlInput.trim()) {
         try {
@@ -541,14 +543,17 @@ export default function AdminNewProductPage() {
                 <label className="border-2 border-dashed border-hairline hover:border-obsidian transition-colors rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer bg-white text-center">
                   <Upload className="w-8 h-8 text-obsidian-400 mb-2" />
                   <span className="text-xs font-medium text-obsidian">
-                    {selectedFile ? selectedFile.name : "Click to select product image file"}
+                    {selectedFiles.length > 0
+                      ? `${selectedFiles.length} image file(s) selected: ${selectedFiles.map((f) => f.name).join(", ")}`
+                      : "Click to select product image file(s)"}
                   </span>
                   <span className="text-[10px] text-obsidian-400 mt-1">
-                    Supports JPG, PNG, WEBP (Max 10MB)
+                    Supports selecting multiple files (JPG, PNG, WEBP up to 15MB each)
                   </span>
                   <input
                     type="file"
                     accept="image/*"
+                    multiple
                     onChange={handleFileSelect}
                     className="hidden"
                   />

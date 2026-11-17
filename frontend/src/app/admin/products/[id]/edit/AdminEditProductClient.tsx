@@ -226,26 +226,37 @@ export default function AdminEditProductPage() {
     }
   };
 
-  // Upload Image File
+  // Upload Image File(s) - Supports Multi-Image Selection
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
     setUploadingImage(true);
+    let successCount = 0;
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("alt_text", form.name);
-      formData.append("is_primary", String(images.length === 0));
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("alt_text", form.name);
+        formData.append("is_primary", String(images.length === 0 && i === 0));
 
-      await adminApi.uploadProductImage(productId, formData);
-      showNotification("Image file uploaded successfully!");
+        await adminApi.uploadProductImage(productId, formData);
+        successCount++;
+      }
+      showNotification(
+        successCount === 1
+          ? "Image file uploaded successfully!"
+          : `${successCount} images uploaded successfully!`
+      );
 
       const updatedImages = await adminApi.getProductImages(productId);
       setImages(updatedImages);
       e.target.value = "";
     } catch (err: any) {
-      showNotification(err.message || "Failed to upload image file", "error");
+      showNotification(err.message || "Failed to upload image file(s)", "error");
+      const updatedImages = await adminApi.getProductImages(productId);
+      setImages(updatedImages);
     } finally {
       setUploadingImage(false);
     }
@@ -871,11 +882,12 @@ export default function AdminEditProductPage() {
                 <div className="space-y-2">
                   <label className="border-2 border-dashed border-hairline rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:border-obsidian transition-colors bg-white/50 text-center">
                     <Upload className="w-6 h-6 text-obsidian-400 mb-1" />
-                    <span className="text-xs font-medium text-obsidian">Click to select image file</span>
-                    <span className="text-[10px] text-obsidian-400 mt-0.5">JPEG, PNG, WEBP up to 10MB</span>
+                    <span className="text-xs font-medium text-obsidian">Click to select image file(s)</span>
+                    <span className="text-[10px] text-obsidian-400 mt-0.5">Supports multi-image upload (JPEG, PNG, WEBP up to 15MB)</span>
                     <input
                       type="file"
                       accept="image/*"
+                      multiple
                       onChange={handleFileUpload}
                       disabled={uploadingImage}
                       className="hidden"

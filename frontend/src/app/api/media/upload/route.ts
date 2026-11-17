@@ -19,27 +19,55 @@ const ALLOWED_MIME_TYPES = new Set([
 const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
 
 /**
- * Helper to authenticate and verify staff or admin clearance
+ * Robust authentication & staff/admin clearance verifier.
+ * Checks:
+ * 1. Bearer token in Authorization header
+ * 2. Supabase auth cookies (including base64 chunked cookies)
+ * 3. createServerSupabaseClient cookie session
+ * 4. User metadata, domain emails (@uwearnova.com), or public.users database record
  */
 async function verifyStaffOrAdmin(req: NextRequest) {
-  // 1. Try cookie session from createServerSupabaseClient
-  const supabase = await createServerSupabaseClient();
-  let {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const supabaseAdmin = createAdminClient();
+  let user: any = null;
 
-  // 2. Fallback to Bearer token from Authorization header if cookie session is empty
-  if (!user) {
-    const authHeader = req.headers.get('authorization');
-    const token = authHeader?.replace(/^Bearer\s+/i, '');
-    if (token) {
+  // 1. Try Bearer token from Authorization header
+  let token = req.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+
+  // 2. Try Supabase Auth Cookie directly from req.cookies
+  if (!token) {
+    const allCookies = req.cookies.getAll();
+    const authCookie = allCookies.find((c) => c.name.endsWith('-auth-token'));
+    if (authCookie?.value) {
       try {
-        const supabaseAdmin = createAdminClient();
-        const { data: tokenData } = await supabaseAdmin.auth.getUser(token);
-        user = tokenData?.user || null;
+        const decodedStr = Buffer.from(authCookie.value.replace(/^base64-/, ''), 'base64').toString('utf-8');
+        const parsed = JSON.parse(decodedStr);
+        token = parsed.access_token || (Array.isArray(parsed) ? parsed[0] : null);
       } catch {
-        // ignore token lookup error
+        token = authCookie.value;
       }
+    }
+  }
+
+  // 3. If token resolved, verify securely with Supabase Auth
+  if (token) {
+    try {
+      const { data: tokenData, error: tokenErr } = await supabaseAdmin.auth.getUser(token);
+      if (!tokenErr && tokenData?.user) {
+        user = tokenData.user;
+      }
+    } catch (err) {
+      console.warn('Token validation error:', err);
+    }
+  }
+
+  // 4. Fallback to createServerSupabaseClient
+  if (!user) {
+    try {
+      const supabase = await createServerSupabaseClient();
+      const { data: cookieUserData } = await supabase.auth.getUser();
+      user = cookieUserData?.user || null;
+    } catch {
+      // ignore
     }
   }
 
@@ -53,17 +81,18 @@ async function verifyStaffOrAdmin(req: NextRequest) {
     return { authorized: false, error: 'Unauthorized: Authentication required', status: 401 };
   }
 
-  // 3. Check user metadata or known staff domain
+  // 5. Verify Staff or Admin privileges:
+  // - Metadata user_type
+  // - @uwearnova.com domain
+  // - public.users record
   const metaType = user.user_metadata?.user_type;
-  const email = user.email?.toLowerCase() || '';
+  const email = (user.email || '').toLowerCase().trim();
 
   if (metaType === 'admin' || metaType === 'staff' || email.endsWith('@uwearnova.com')) {
     return { authorized: true, user };
   }
 
-  // 4. Verify in public.users table via admin client
   try {
-    const supabaseAdmin = createAdminClient();
     const { data: domainUser } = await supabaseAdmin
       .from('users')
       .select('id, user_type, status')
@@ -74,7 +103,7 @@ async function verifyStaffOrAdmin(req: NextRequest) {
       return { authorized: true, user };
     }
   } catch (err) {
-    console.warn('Database user clearance lookup error:', err);
+    console.warn('Database clearance check error:', err);
   }
 
   return {
