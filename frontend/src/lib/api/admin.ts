@@ -347,9 +347,15 @@ export const adminApi = {
     expires_in_seconds: number;
     is_mock?: boolean;
   }> {
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (session?.access_token) {
+      headers["Authorization"] = `Bearer ${session.access_token}`;
+    }
+
     const res = await fetch("/api/media/upload", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         product_id: Number(productId),
         filename: params.filename,
@@ -426,14 +432,52 @@ export const adminApi = {
       throw new Error("No file provided for upload");
     }
 
-    // 1. Get presigned R2 upload URL
+    // 1. Direct server-side upload attempt (fast, reliable, immune to browser CORS policies)
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("product_id", String(productId));
+      if (altText) fd.append("alt_text", altText);
+      if (isPrimary) fd.append("is_primary", "true");
+
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+      }
+
+      const res = await fetch("/api/media/upload", {
+        method: "POST",
+        headers,
+        body: fd,
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        if (result.image) {
+          return result.image;
+        }
+      } else {
+        const errJson = await res.json().catch(() => null);
+        if (errJson?.error && (res.status === 401 || res.status === 403)) {
+          throw new Error(errJson.error);
+        }
+      }
+    } catch (directErr: any) {
+      if (directErr.message?.includes("Forbidden") || directErr.message?.includes("Unauthorized")) {
+        throw directErr;
+      }
+      console.warn("Direct upload notice, falling back to presigned intent:", directErr);
+    }
+
+    // 2. Fallback: Presigned R2 upload URL
     const intent = await adminApi.requestMediaUploadIntent(productId, {
       filename: file.name,
       mime_type: file.type || "image/jpeg",
       size_bytes: file.size,
     });
 
-    // 2. Perform direct PUT to Cloudflare R2 (or simulated dev endpoint)
+    // 3. Perform direct PUT to Cloudflare R2 (or simulated dev endpoint)
     if (!intent.is_mock) {
       const uploadRes = await fetch(intent.upload_url, {
         method: "PUT",
@@ -446,7 +490,7 @@ export const adminApi = {
       }
     }
 
-    // 3. Register image in database
+    // 4. Register image in database
     return await adminApi.confirmProductImageUpload(productId, {
       image_url: intent.public_url,
       alt_text: altText || file.name.replace(/\.[^/.]+$/, ""),

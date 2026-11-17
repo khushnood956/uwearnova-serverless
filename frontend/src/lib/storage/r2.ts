@@ -65,6 +65,39 @@ export function sanitizeFilename(filename: string): string {
 }
 
 /**
+ * Direct server-side upload of a file Buffer to Cloudflare R2
+ */
+export async function uploadR2Buffer(
+  buffer: Buffer,
+  options: {
+    productId: number;
+    filename: string;
+    mimeType: string;
+  }
+): Promise<{ storageKey: string; publicUrl: string }> {
+  const { productId, filename, mimeType } = options;
+  const cleanFilename = sanitizeFilename(filename);
+  const timestamp = Date.now();
+  const randomSuffix = Math.random().toString(36).substring(2, 8);
+  const storageKey = `products/${productId}/${timestamp}-${randomSuffix}-${cleanFilename}`;
+  const publicUrl = `${R2_PUBLIC_DOMAIN}/${storageKey}`;
+
+  const client = getR2Client();
+  if (client) {
+    await client.send(
+      new PutObjectCommand({
+        Bucket: R2_BUCKET_NAME,
+        Key: storageKey,
+        Body: buffer,
+        ContentType: mimeType,
+      })
+    );
+  }
+
+  return { storageKey, publicUrl };
+}
+
+/**
  * Generate a short-lived presigned PUT URL for direct client upload to Cloudflare R2.
  */
 export async function createPresignedUploadUrl(
