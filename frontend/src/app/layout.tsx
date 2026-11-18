@@ -37,7 +37,11 @@ export const metadata: Metadata = {
     "accessories",
     "contemporary style",
   ],
-  authors: [{ name: BRAND_CONFIG.name }],
+  authors: [
+    { name: BRAND_CONFIG.name },
+    { name: "Khushnood Ahmad", url: "https://khushnood956.github.io/Portfolio" },
+  ],
+  creator: "Khushnood Ahmad",
   icons: {
     icon: [
       { url: "/favicon.ico" },

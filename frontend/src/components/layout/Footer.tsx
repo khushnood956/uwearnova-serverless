@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowRight, Check, MapPin, Phone } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Check, MapPin, Phone } from "lucide-react";
 import { BRAND_CONFIG } from "@/lib/brand";
 import { Button } from "@/components/ui/Button";
 
@@ -194,20 +194,37 @@ export function Footer() {
           </div>
         </div>
 
-        {/* Bottom Bar: Copyright, Policies & local currency */}
-        <div className="pt-8 border-t border-obsidian-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-ivory-light/50 font-light">
-          <div className="flex flex-wrap items-center gap-4">
+        {/* Bottom Bar: Copyright, Policies, Designer Credit & local currency */}
+        <div className="pt-8 border-t border-obsidian-800 flex flex-col lg:flex-row items-center justify-between gap-4 text-xs text-ivory-light/50 font-light">
+          <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 sm:gap-4">
             <p>© {new Date().getFullYear()} {BRAND_CONFIG.name}. Modern luxury for Pakistan.</p>
-            <span>•</span>
+            <span className="text-obsidian-700">•</span>
             <Link href="/privacy-policy" className="hover:text-white transition-colors">
               Privacy Policy
             </Link>
-            <span>•</span>
+            <span className="text-obsidian-700">•</span>
             <Link href="/terms" className="hover:text-white transition-colors">
               Terms & Conditions
             </Link>
           </div>
-          <div className="flex items-center gap-4">
+
+          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6">
+            <a
+              href="https://khushnood956.github.io/Portfolio"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group inline-flex items-center gap-1.5 text-ivory-light/60 hover:text-white transition-colors duration-fast"
+              title="Designed & Developed by Khushnood Ahmad"
+            >
+              <span className="font-light">Designed & Developed by</span>
+              <span className="text-champagne-light font-normal tracking-wide group-hover:text-champagne underline decoration-champagne/40 underline-offset-4 group-hover:decoration-champagne transition-colors">
+                Khushnood Ahmad
+              </span>
+              <ArrowUpRight className="w-3.5 h-3.5 text-champagne-light/70 group-hover:text-champagne group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-fast" />
+            </a>
+
+            <span className="hidden sm:inline text-obsidian-700">•</span>
+
             <span className="px-3 py-1 rounded-button bg-obsidian-900 border border-obsidian-700 text-champagne-light text-[11px] tracking-wide">
               Currency: PKR (Rs.) • Pakistan
             </span>
